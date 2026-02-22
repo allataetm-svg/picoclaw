@@ -1,7 +1,6 @@
 # Binaries
 # Go build artifacts
 bin/
-build/
 *.exe
 *.dll
 *.so
@@ -11,14 +10,6 @@ build/
 /picoclaw
 /picoclaw-test
 cmd/picoclaw/workspace
-
-# Picoclaw specific
-
-# PicoClaw
-.picoclaw/
-config.json
-sessions/
-build/
 
 # Coverage
 
