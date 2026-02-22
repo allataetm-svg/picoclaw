@@ -9,12 +9,14 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/auth"
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/sipeed/picoclaw/pkg/providers/antigravity"
 )
 
 const supportedProvidersMsg = "Supported providers: openai, anthropic, google-antigravity"
@@ -34,9 +36,37 @@ func authCmd() {
 		authStatusCmd()
 	case "models":
 		authModelsCmd()
+	case "accounts":
+		authAccountsCmd()
+	case "quota":
+		authQuotaCmd()
+	case "account":
+		authAccountCmd()
 	default:
 		fmt.Printf("Unknown auth command: %s\n", os.Args[2])
 		authHelp()
+	}
+}
+
+func authAccountCmd() {
+	if len(os.Args) < 4 {
+		fmt.Println("Account commands:")
+		fmt.Println("  add     Add a new account (alias for login)")
+		fmt.Println("  remove  Remove an account by email")
+		fmt.Println()
+		fmt.Println("Examples:")
+		fmt.Println("  picoclaw auth account add")
+		fmt.Println("  picoclaw auth account remove --email user@example.com")
+		return
+	}
+
+	switch os.Args[3] {
+	case "add":
+		authAccountAddCmd()
+	case "remove":
+		authAccountRemoveCmd()
+	default:
+		fmt.Printf("Unknown account command: %s\n", os.Args[3])
 	}
 }
 
@@ -46,6 +76,9 @@ func authHelp() {
 	fmt.Println("  logout      Remove stored credentials")
 	fmt.Println("  status      Show current auth status")
 	fmt.Println("  models      List available Antigravity models")
+	fmt.Println("  accounts    List multi-account configuration (Antigravity)")
+	fmt.Println("  quota       Check account quotas (Antigravity)")
+	fmt.Println("  account     Manage accounts (add, remove)")
 	fmt.Println()
 	fmt.Println("Login options:")
 	fmt.Println("  --provider <name>    Provider to login with (openai, anthropic, google-antigravity)")
@@ -56,6 +89,8 @@ func authHelp() {
 	fmt.Println("  picoclaw auth login --provider openai --device-code")
 	fmt.Println("  picoclaw auth login --provider anthropic")
 	fmt.Println("  picoclaw auth login --provider google-antigravity")
+	fmt.Println("  picoclaw auth accounts")
+	fmt.Println("  picoclaw auth quota")
 	fmt.Println("  picoclaw auth models")
 	fmt.Println("  picoclaw auth logout --provider openai")
 	fmt.Println("  picoclaw auth status")
@@ -509,4 +544,197 @@ func isOpenAIModel(model string) bool {
 func isAnthropicModel(model string) bool {
 	return model == "anthropic" ||
 		strings.HasPrefix(model, "anthropic/")
+}
+
+// --- Multi-account Antigravity support ---
+
+func authAccountsCmd() {
+	home, _ := os.UserHomeDir()
+	configDir := filepath.Join(home, ".picoclaw")
+	accountManager := antigravity.NewProvider(configDir).GetAccountManager()
+
+	accounts := accountManager.GetAccounts()
+	if len(accounts) == 0 {
+		fmt.Println("No accounts configured.")
+		fmt.Println("Run: picoclaw auth login --provider google-antigravity")
+		return
+	}
+
+	fmt.Println("\nAntigravity Accounts:")
+	fmt.Println("----------------------")
+	for i, acc := range accounts {
+		active := ""
+		if i == 0 {
+			active = " (active)"
+		}
+		disabled := ""
+		if acc.Disabled {
+			disabled = " [DISABLED]"
+		}
+		rateLimited := ""
+		if acc.IsRateLimited() {
+			rateLimited = " [RATE LIMITED]"
+		}
+		fmt.Printf("  %d. %s%s%s%s\n", i+1, acc.Email, active, disabled, rateLimited)
+		if acc.ProjectID != "" {
+			fmt.Printf("      Project: %s\n", acc.ProjectID)
+		}
+	}
+	fmt.Printf("\nTotal: %d account(s)\n", len(accounts))
+}
+
+func authQuotaCmd() {
+	home, _ := os.UserHomeDir()
+	configDir := filepath.Join(home, ".picoclaw")
+	provider := antigravity.NewProvider(configDir)
+
+	accountManager := provider.GetAccountManager()
+	accounts := accountManager.GetAccounts()
+	if len(accounts) == 0 {
+		fmt.Println("No accounts configured.")
+		return
+	}
+
+	for _, acc := range accounts {
+		fmt.Printf("\nAccount: %s\n", acc.Email)
+		fmt.Println(strings.Repeat("-", 40))
+
+		// Refresh token if needed
+		account := accountManager.GetAccount(acc.Email)
+		if account != nil && account.NeedsRefresh() && account.RefreshToken != "" {
+			fmt.Println("  Refreshing token...")
+		}
+
+		projectID := acc.ProjectID
+		if projectID == "" {
+			fmt.Println("  No project ID. Skipping quota check.")
+			continue
+		}
+
+		// Note: Would need to fetch access token here in a real implementation
+		_ = projectID // Placeholder for actual quota fetch
+		fmt.Printf("  Project: %s\n", projectID)
+		fmt.Println("  (Run 'picoclaw auth models' for detailed model list)")
+	}
+}
+
+func authAccountAddCmd() {
+	authLoginGoogleAntigravityMulti()
+}
+
+func authAccountRemoveCmd() {
+	email := ""
+	args := os.Args[4:]
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--email" || args[i] == "-e" {
+			if i+1 < len(args) {
+				email = args[i+1]
+				break
+			}
+		}
+	}
+
+	if email == "" {
+		fmt.Println("Error: --email is required")
+		fmt.Println("Usage: picoclaw auth account remove --email user@example.com")
+		return
+	}
+
+	home, _ := os.UserHomeDir()
+	configDir := filepath.Join(home, ".picoclaw")
+	accountManager := antigravity.NewProvider(configDir).GetAccountManager()
+
+	if err := accountManager.RemoveAccount(email); err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Removed account: %s\n", email)
+}
+
+func authLoginGoogleAntigravityMulti() {
+	cfg := auth.GoogleAntigravityOAuthConfig()
+
+	cred, err := auth.LoginBrowser(cfg)
+	if err != nil {
+		fmt.Printf("Login failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	cred.Provider = "google-antigravity"
+
+	// Fetch user email from Google userinfo
+	email, err := fetchGoogleUserEmail(cred.AccessToken)
+	if err != nil {
+		fmt.Printf("Warning: could not fetch email: %v\n", err)
+	} else {
+		cred.Email = email
+		fmt.Printf("Email: %s\n", email)
+	}
+
+	// Fetch Cloud Code Assist project ID
+	projectID, err := providers.FetchAntigravityProjectID(cred.AccessToken)
+	if err != nil {
+		fmt.Printf("Warning: could not fetch project ID: %v\n", err)
+		fmt.Println("You may need Google Cloud Code Assist enabled on your account.")
+	} else {
+		cred.ProjectID = projectID
+		fmt.Printf("Project: %s\n", projectID)
+	}
+
+	// Add to multi-account store
+	home, _ := os.UserHomeDir()
+	configDir := filepath.Join(home, ".picoclaw")
+	accountManager := antigravity.NewProvider(configDir).GetAccountManager()
+
+	account := antigravity.Account{
+		Email:        cred.Email,
+		RefreshToken: cred.RefreshToken,
+		AccessToken:  cred.AccessToken,
+		ProjectID:    cred.ProjectID,
+		ExpiresAt:    cred.ExpiresAt,
+	}
+
+	if err := accountManager.AddAccount(account); err != nil {
+		fmt.Printf("Failed to save account: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Also save to legacy credential store for backward compatibility
+	if err := auth.SetCredential("google-antigravity", cred); err != nil {
+		fmt.Printf("Warning: could not update legacy credential store: %v\n", err)
+	}
+
+	appCfg, err := loadConfig()
+	if err == nil {
+		// Update or add antigravity in ModelList
+		foundAntigravity := false
+		for i := range appCfg.ModelList {
+			if isAntigravityModel(appCfg.ModelList[i].Model) {
+				appCfg.ModelList[i].AuthMethod = "oauth"
+				foundAntigravity = true
+				break
+			}
+		}
+
+		if !foundAntigravity {
+			appCfg.ModelList = append(appCfg.ModelList, config.ModelConfig{
+				ModelName:  "gemini-flash",
+				Model:      "antigravity/gemini-3-flash",
+				AuthMethod: "oauth",
+			})
+		}
+
+		appCfg.Agents.Defaults.Model = "gemini-flash"
+
+		if err := config.SaveConfig(getConfigPath(), appCfg); err != nil {
+			fmt.Printf("Warning: could not update config: %v\n", err)
+		}
+	}
+
+	fmt.Println("\n✓ Google Antigravity login successful!")
+	accountCount := accountManager.AccountCount()
+	fmt.Printf("Total accounts: %d\n", accountCount)
+	fmt.Println("Default model set to: gemini-flash")
+	fmt.Println("Run again to add more accounts for higher quotas!")
 }

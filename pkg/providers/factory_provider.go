@@ -6,10 +6,14 @@
 package providers
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/sipeed/picoclaw/pkg/providers/antigravity"
 )
 
 // createClaudeAuthProvider creates a Claude provider using OAuth credentials from auth store.
@@ -121,6 +125,22 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 	case "antigravity":
 		return NewAntigravityProvider(), modelID, nil
 
+	case "antigravity-multi":
+		home, _ := os.UserHomeDir()
+		configDir := filepath.Join(home, ".picoclaw")
+		provider := antigravity.NewProvider(configDir)
+		return &AntigravityMultiProvider{provider: provider}, modelID, nil
+
+	case "opencode":
+		if cfg.APIKey == "" {
+			return nil, "", fmt.Errorf("api_key is required for opencode protocol (get one from opencode.ai/auth)")
+		}
+		apiBase := cfg.APIBase
+		if apiBase == "" {
+			apiBase = "https://api.opencode.ai/v1"
+		}
+		return NewOpenCodeProvider(cfg.APIKey, apiBase), modelID, nil
+
 	case "claude-cli", "claudecli":
 		workspace := cfg.Workspace
 		if workspace == "" {
@@ -186,7 +206,27 @@ func getDefaultAPIBase(protocol string) string {
 		return "https://dashscope.aliyuncs.com/compatible-mode/v1"
 	case "vllm":
 		return "http://localhost:8000/v1"
+	case "opencode":
+		return "https://api.opencode.ai/v1"
 	default:
 		return ""
 	}
+}
+
+type AntigravityMultiProvider struct {
+	provider *antigravity.Provider
+}
+
+func (p *AntigravityMultiProvider) Chat(
+	ctx context.Context,
+	messages []Message,
+	tools []ToolDefinition,
+	model string,
+	options map[string]any,
+) (*LLMResponse, error) {
+	return p.provider.Chat(ctx, messages, tools, model, options)
+}
+
+func (p *AntigravityMultiProvider) GetDefaultModel() string {
+	return p.provider.GetDefaultModel()
 }

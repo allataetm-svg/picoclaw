@@ -17,15 +17,40 @@
       "api_base": "https://api.openai.com/v1"
     },
     {
+      "model_name": "opencode-qwen",
+      "model": "opencode/qwen-3-coder-480b",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-sonnet",
+      "model": "opencode/claude-sonnet-4",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
       "model_name": "claude-sonnet-4.6",
       "model": "anthropic/claude-sonnet-4.6",
       "api_key": "sk-ant-your-key",
       "api_base": "https://api.anthropic.com/v1"
     },
     {
-      "model_name": "gemini",
-      "model": "antigravity/gemini-2.0-flash",
+      "model_name": "gemini-flash",
+      "model": "antigravity/gemini-3-flash",
       "auth_method": "oauth"
+    },
+    {
+      "model_name": "gemini-pro",
+      "model": "antigravity/gemini-3-pro",
+      "auth_method": "oauth"
+    },
+    {
+      "model_name": "claude-opus-thinking",
+      "model": "antigravity/claude-opus-4.6-thinking",
+      "auth_method": "oauth"
+    },
+    {
+      "model_name": "gemini-flash-thinking",
+      "model": "antigravity/gemini-3-flash",
+      "variant": "high"
     },
     {
       "model_name": "deepseek",
@@ -196,6 +221,15 @@
     "volcengine": {
       "api_key": "",
       "api_base": ""
+    },
+    "antigravity": {
+      "api_key": "",
+      "api_base": "",
+      "multi_account": true
+    },
+    "opencode": {
+      "api_key": "oc_xxx",
+      "api_base": "https://api.opencode.ai/v1"
     }
   },
   "tools": {
