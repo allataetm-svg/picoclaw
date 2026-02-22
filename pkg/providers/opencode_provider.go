@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/sipeed/picoclaw/pkg/logger"
 )
 
 const (
@@ -80,6 +82,12 @@ func (p *OpenCodeProvider) Chat(
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("opencode API error (HTTP %d): %s", resp.StatusCode, truncateString(string(respBody), 500))
 	}
+
+	// Debug: log response for troubleshooting
+	logger.DebugCF("provider.opencode", "Response", map[string]any{
+		"status": resp.StatusCode,
+		"body":   truncateString(string(respBody), 200),
+	})
 
 	if strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {
 		return p.parseSSEResponse(string(respBody))
@@ -241,7 +249,7 @@ type openAIResponse struct {
 func (p *OpenCodeProvider) parseJSONResponse(body []byte) (*LLMResponse, error) {
 	var resp openAIResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("parsing opencode response: %w", err)
+		return nil, fmt.Errorf("parsing opencode response: %w (body: %s)", err, truncateString(string(body), 200))
 	}
 
 	if len(resp.Choices) == 0 {
