@@ -851,29 +851,72 @@ func configureAPIKeyProvider(p ProviderInfo) {
 		return
 	}
 
+	var selectedModel string
+
 	switch p.ID {
 	case "opencode":
+		opencodeModels := []string{
+			"glm-5-free",
+			"glm-5",
+			"glm-4.7",
+			"glm-4.6",
+			"minimax-m2.5-free",
+			"minimax-m2.5",
+			"minimax-m2.1",
+			"kimi-k2.5-free",
+			"kimi-k2.5",
+			"kimi-k2",
+			"qwen3-coder",
+			"big-pickle",
+			"gpt-5.2",
+			"gpt-5.1",
+			"gpt-5",
+			"gpt-5-nano",
+			"claude-opus-4-6",
+			"claude-sonnet-4-6",
+			"claude-haiku-4-5",
+			"gemini-3-pro",
+			"gemini-3-flash",
+		}
+
+		fmt.Println()
+		fmt.Println("  Available models:")
+		for i, m := range opencodeModels {
+			fmt.Printf("    [%d] %s\n", i+1, m)
+		}
+		fmt.Println()
+		fmt.Print("  Select default model (number): ")
+
+		var modelNum int
+		fmt.Scanln(&modelNum)
+		if modelNum >= 1 && modelNum <= len(opencodeModels) {
+			selectedModel = opencodeModels[modelNum-1]
+		} else {
+			selectedModel = "glm-5-free"
+		}
+
 		found := false
 		for i := range appCfg.ModelList {
 			if strings.HasPrefix(appCfg.ModelList[i].Model, "opencode/") {
 				appCfg.ModelList[i].APIKey = apiKey
 				appCfg.ModelList[i].AuthMethod = "token"
+				appCfg.ModelList[i].ModelName = selectedModel
+				appCfg.ModelList[i].Model = "opencode/" + selectedModel
 				found = true
 				break
 			}
 		}
 		if !found {
 			appCfg.ModelList = append(appCfg.ModelList, config.ModelConfig{
-				ModelName:  "glm-5-free",
-				Model:      "opencode/glm-5-free",
+				ModelName:  selectedModel,
+				Model:      "opencode/" + selectedModel,
 				APIKey:     apiKey,
 				AuthMethod: "token",
 			})
 		}
-		if appCfg.Agents.Defaults.Model == "" {
-			appCfg.Agents.Defaults.Model = "glm-5-free"
-		}
+		appCfg.Agents.Defaults.Model = selectedModel
 		fmt.Printf("  ✓ API key saved for %s\n", p.Name)
+		fmt.Printf("  ✓ Default model set to: %s\n", selectedModel)
 	}
 
 	if err := config.SaveConfig(getConfigPath(), appCfg); err != nil {
