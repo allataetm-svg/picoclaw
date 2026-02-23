@@ -42,6 +42,8 @@ func authCmd() {
 		authQuotaCmd()
 	case "account":
 		authAccountCmd()
+	case "setup":
+		authSetupCmd()
 	default:
 		fmt.Printf("Unknown auth command: %s\n", os.Args[2])
 		authHelp()
@@ -79,10 +81,11 @@ func authHelp() {
 	fmt.Println("  accounts    List multi-account configuration (Antigravity)")
 	fmt.Println("  quota       Check account quotas (Antigravity)")
 	fmt.Println("  account     Manage accounts (add, remove)")
+	fmt.Println("  setup       Interactive setup for providers (OpenCode, etc.)")
 	fmt.Println()
 	fmt.Println("Login options:")
 	fmt.Println("  --provider <name>    Provider to login with (openai, anthropic, google-antigravity)")
-	fmt.Println("  --device-code        Use device code flow (for headless environments)")
+	fmt.Println("  --device-code         Use device code flow (for headless environments)")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  picoclaw auth login --provider openai")
@@ -94,6 +97,7 @@ func authHelp() {
 	fmt.Println("  picoclaw auth models")
 	fmt.Println("  picoclaw auth logout --provider openai")
 	fmt.Println("  picoclaw auth status")
+	fmt.Println("  picoclaw auth setup")
 }
 
 func authLoginCmd() {
@@ -737,4 +741,148 @@ func authLoginGoogleAntigravityMulti() {
 	fmt.Printf("Total accounts: %d\n", accountCount)
 	fmt.Println("Default model set to: gemini-flash")
 	fmt.Println("Run again to add more accounts for higher quotas!")
+}
+
+type ProviderInfo struct {
+	ID          string
+	Name        string
+	Description string
+	AuthType    string
+}
+
+var availableProviders = []ProviderInfo{
+	{
+		ID:          "opencode",
+		Name:        "OpenCode Zen",
+		Description: "Access GPT, Claude, Gemini, GLM, Kimi, MiniMax and more",
+		AuthType:    "api_key",
+	},
+}
+
+func authSetupCmd() {
+	fmt.Println("\n╔═══════════════════════════════════════════╗")
+	fmt.Println("║       PicoClaw Auth Setup                ║")
+	fmt.Println("╚═══════════════════════════════════════════╝")
+	fmt.Println()
+
+	fmt.Println("Available Providers:")
+	fmt.Println("---------------------")
+	for i, p := range availableProviders {
+		authType := "API Key"
+		if p.AuthType == "oauth" {
+			authType = "OAuth"
+		}
+		fmt.Printf("  [%d] %s (%s)\n", i+1, p.Name, authType)
+		fmt.Printf("      %s\n", p.Description)
+	}
+	fmt.Println()
+
+	fmt.Print("Enter provider numbers to configure (comma-separated, e.g., 1,2): ")
+	var selection string
+	fmt.Scanln(&selection)
+
+	selected := parseSelection(selection, len(availableProviders))
+	if len(selected) == 0 {
+		fmt.Println("No providers selected. Exiting.")
+		return
+	}
+
+	fmt.Println()
+	fmt.Println(strings.Repeat("─", 40))
+	fmt.Println()
+
+	for _, idx := range selected {
+		p := availableProviders[idx-1]
+		fmt.Printf("Configuring: %s\n", p.Name)
+
+		if p.AuthType == "api_key" {
+			configureAPIKeyProvider(p)
+		} else if p.AuthType == "oauth" {
+			configureOAuthProvider(p)
+		}
+		fmt.Println()
+	}
+
+	fmt.Println("✓ Setup complete!")
+	fmt.Println("\nRun 'picoclaw auth status' to verify your configuration.")
+}
+
+func parseSelection(input string, max int) []int {
+	var result []int
+	input = strings.ReplaceAll(input, " ", "")
+	parts := strings.Split(input, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		var num int
+		fmt.Sscanf(part, "%d", &num)
+		if num >= 1 && num <= max {
+			exists := false
+			for _, v := range result {
+				if v == num {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				result = append(result, num)
+			}
+		}
+	}
+	return result
+}
+
+func configureAPIKeyProvider(p ProviderInfo) {
+	fmt.Printf("  API Key: ")
+	var apiKey string
+	fmt.Scanln(&apiKey)
+	apiKey = strings.TrimSpace(apiKey)
+
+	if apiKey == "" {
+		fmt.Println("  ✗ API key cannot be empty")
+		return
+	}
+
+	appCfg, err := loadConfig()
+	if err != nil {
+		fmt.Printf("  ✗ Failed to load config: %v\n", err)
+		return
+	}
+
+	switch p.ID {
+	case "opencode":
+		found := false
+		for i := range appCfg.ModelList {
+			if strings.HasPrefix(appCfg.ModelList[i].Model, "opencode/") {
+				appCfg.ModelList[i].APIKey = apiKey
+				appCfg.ModelList[i].AuthMethod = "token"
+				found = true
+				break
+			}
+		}
+		if !found {
+			appCfg.ModelList = append(appCfg.ModelList, config.ModelConfig{
+				ModelName:  "opencode-qwen3",
+				Model:      "opencode/qwen3-coder",
+				APIKey:     apiKey,
+				AuthMethod: "token",
+			})
+		}
+		if appCfg.Agents.Defaults.Model == "" {
+			appCfg.Agents.Defaults.Model = "opencode-qwen3"
+		}
+		fmt.Printf("  ✓ API key saved for %s\n", p.Name)
+	}
+
+	if err := config.SaveConfig(getConfigPath(), appCfg); err != nil {
+		fmt.Printf("  ✗ Failed to save config: %v\n", err)
+		return
+	}
+}
+
+func configureOAuthProvider(p ProviderInfo) {
+	fmt.Printf("  Starting OAuth flow for %s...\n", p.Name)
+	fmt.Println("  (OAuth not yet implemented for interactive setup)")
 }
