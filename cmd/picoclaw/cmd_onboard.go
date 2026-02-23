@@ -10,12 +10,15 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/sipeed/picoclaw/pkg/config"
 )
 
-var embeddedFiles embed.FS
+//go:generate cp -r ../../workspace workspace
+//go:embed workspace
+var embeddedWorkspace embed.FS
 
 func onboard() {
 	configPath := getConfigPath()
@@ -34,210 +37,258 @@ func onboard() {
 	fmt.Println("\n=== PicoClaw Setup ===")
 	fmt.Println("")
 	fmt.Println("Choose setup mode:")
-	fmt.Println("  1) Quickstart   - Setup one provider + one channel (CLI)")
-	fmt.Println("  2) Advanced      - Multiple providers, accounts, models, channels")
+	fmt.Println("  1) Quickstart   - One provider + one channel")
+	fmt.Println("  2) Advanced      - Multiple providers, models, channels")
 	fmt.Println("")
 
-	choice := readChoice("Enter choice (1/2): ", []string{"1", "2"})
+	choice := promptChoice([]string{"Quickstart", "Advanced"})
 
-	if choice == "1" {
-		quickstartSetup(configPath)
+	cfg := config.DefaultConfig()
+
+	if choice == 0 {
+		quickstartSetup(cfg)
 	} else {
-		advancedSetup(configPath)
+		advancedSetup(cfg)
 	}
 
 	workspace := getWorkspacePath()
 	createWorkspaceTemplates(workspace)
 
+	if err := config.SaveConfig(configPath, cfg); err != nil {
+		fmt.Printf("Error saving config: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("\nConfig saved to %s\n", configPath)
 	fmt.Printf("\n%s picoclaw is ready!\n", logo)
 	fmt.Println("\nNext steps:")
 	fmt.Println("  1. Chat: picoclaw agent -m \"Hello!\"")
 	fmt.Println("  2. Or run: picoclaw agent (interactive mode)")
 }
 
-func quickstartSetup(configPath string) {
+func quickstartSetup(cfg *config.Config) {
 	fmt.Println("\n--- Quickstart Setup ---")
 	fmt.Println("")
 
-	provider := selectProvider()
+	providerIdx := promptChoice(providerList)
+	provider := providerList[providerIdx]
+
 	apiKey := readLine("Enter API key: ")
-	modelName := selectModelForProvider(provider)
-	channel := selectChannel()
 
-	cfg := config.DefaultConfig()
+	model := promptSelect("Select model:", provider)
 
-	cfg.ModelList = []config.ModelConfig{}
-	cfg.ModelList = append(cfg.ModelList, config.ModelConfig{
-		ModelName: modelName,
-		Model:     providerModels[provider],
+	channel := promptChoice(channelList[:2])
+
+	cfg.ModelList = []config.ModelConfig{{
+		ModelName: model,
+		Model:     "opencode/" + model,
 		APIKey:    apiKey,
-		APIBase:   providerBases[provider],
-	})
+		APIBase:   "https://opencode.ai/zen",
+	}}
 
-	cfg.Agents.Defaults.Model = modelName
-	cfg.Agents.Defaults.Provider = ""
+	cfg.Agents.Defaults.Model = model
 
-	cfg.Channels = config.ChannelsConfig{}
-
-	switch channel {
-	case "telegram":
-		cfg.Channels.Telegram = config.TelegramConfig{
-			Enabled:   true,
-			Token:     readLine("Enter Telegram bot token: "),
-			AllowFrom: config.FlexibleStringSlice{},
-		}
+	if channel == 1 {
+		cfg.Channels.Telegram.Enabled = true
+		cfg.Channels.Telegram.Token = readLine("Enter Telegram bot token: ")
+		cfg.Channels.Telegram.AllowFrom = config.FlexibleStringSlice{}
 	}
-
-	if err := config.SaveConfig(configPath, cfg); err != nil {
-		fmt.Printf("Error saving config: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("\nConfig saved to %s\n", configPath)
 }
 
-func advancedSetup(configPath string) {
+func advancedSetup(cfg *config.Config) {
 	fmt.Println("\n--- Advanced Setup ---")
 	fmt.Println("")
 
-	cfg := config.DefaultConfig()
+	fmt.Println("=== Providers & Models ===")
+	fmt.Println("Select providers (space to toggle, enter to confirm):")
 
-	fmt.Println("=== Models & Providers ===")
-	fmt.Println("Add models (press Enter when done):")
+	selectedProviders := promptMultiSelect(providerList)
+
 	cfg.ModelList = []config.ModelConfig{}
 
-	for {
-		fmt.Printf("\nModel #%d:\n", len(cfg.ModelList)+1)
-		provider := selectProvider()
-		apiKey := readLine("  API key: ")
-		modelName := readLine("  Model name (e.g., gpt-5.2): ")
+	for _, pi := range selectedProviders {
+		provider := providerList[pi]
+		models := providerModels[provider]
 
-		cfg.ModelList = append(cfg.ModelList, config.ModelConfig{
-			ModelName: modelName,
-			Model:     providerModels[provider],
-			APIKey:    apiKey,
-			APIBase:   providerBases[provider],
-		})
+		fmt.Printf("\nProvider: %s\n", provider)
+		selectedModels := promptMultiSelect(models)
 
-		if !readYesNo("Add another model? (y/n): ") {
-			break
+		apiKey := readLine(fmt.Sprintf("API key for %s: ", provider))
+
+		for _, mi := range selectedModels {
+			modelName := models[mi]
+			cfg.ModelList = append(cfg.ModelList, config.ModelConfig{
+				ModelName: modelName,
+				Model:     "opencode/" + modelName,
+				APIKey:    apiKey,
+				APIBase:   "https://opencode.ai/zen",
+			})
 		}
 	}
 
 	if len(cfg.ModelList) > 0 {
-		defaultModel := cfg.ModelList[0].ModelName
-		defaultModel = readLineWithDefault("Default model: ", defaultModel)
-		cfg.Agents.Defaults.Model = defaultModel
+		cfg.Agents.Defaults.Model = cfg.ModelList[0].ModelName
 
-		if readYesNo("Add model fallbacks? (y/n): ") {
-			fmt.Println("Enter fallback models (one per line, empty to stop):")
-			for {
-				fb := readLine("  Fallback model: ")
-				if fb == "" {
-					break
+		if len(cfg.ModelList) > 1 {
+			fmt.Println("\nSelect default model:")
+			defaultIdx := promptSelectIndex("Default model:", modelsToNames(cfg.ModelList))
+			cfg.Agents.Defaults.Model = cfg.ModelList[defaultIdx].ModelName
+
+			if promptYesNo("Add model fallbacks?") {
+				fmt.Println("Select fallback models (space to toggle, enter to confirm):")
+				fallbacks := promptMultiSelectIndex(modelsToNames(cfg.ModelList))
+				for _, fi := range fallbacks {
+					if fi != defaultIdx {
+						cfg.Agents.Defaults.ModelFallbacks = append(cfg.Agents.Defaults.ModelFallbacks, cfg.ModelList[fi].ModelName)
+					}
 				}
-				cfg.Agents.Defaults.ModelFallbacks = append(cfg.Agents.Defaults.ModelFallbacks, fb)
 			}
 		}
 	}
 
 	fmt.Println("\n=== Channels ===")
-	fmt.Println("Configure channels (press Enter when done):")
+	fmt.Println("Select channels (space to toggle, enter to confirm):")
+	selectedChannels := promptMultiSelect(channelList)
 
-	cfg.Channels = config.ChannelsConfig{}
-
-	channelTypes := []string{"cli", "telegram", "discord", "whatsapp", "slack", "feishu", "dingtalk", "qq", "onebot", "wecom", "maixcam"}
-
-	for {
-		fmt.Println("\nAvailable channels:", strings.Join(channelTypes, ", "))
-		channel := readLine("Add channel (or Enter to skip): ")
-		if channel == "" {
-			break
-		}
-
-		switch channel {
-		case "cli":
-			fmt.Println("  CLI is always available (no config needed)")
-		case "telegram":
-			cfg.Channels.Telegram = config.TelegramConfig{
-				Enabled:   true,
-				Token:     readLine("  Bot token: "),
-				AllowFrom: config.FlexibleStringSlice{},
+	for _, ci := range selectedChannels {
+		switch ci {
+		case 0:
+			fmt.Println("  CLI is always available")
+		case 1:
+			cfg.Channels.Telegram.Enabled = true
+			cfg.Channels.Telegram.Token = readLine("  Telegram bot token: ")
+			cfg.Channels.Telegram.AllowFrom = config.FlexibleStringSlice{}
+		case 2:
+			cfg.Channels.Discord.Enabled = true
+			cfg.Channels.Discord.Token = readLine("  Discord bot token: ")
+			cfg.Channels.Discord.AllowFrom = config.FlexibleStringSlice{}
+		case 3:
+			cfg.Channels.WhatsApp.Enabled = true
+			cfg.Channels.WhatsApp.BridgeURL = readLine("  WhatsApp bridge URL (default: ws://localhost:3001): ")
+			if cfg.Channels.WhatsApp.BridgeURL == "" {
+				cfg.Channels.WhatsApp.BridgeURL = "ws://localhost:3001"
 			}
-			fmt.Println("  Telegram channel enabled")
-		case "discord":
-			cfg.Channels.Discord = config.DiscordConfig{
-				Enabled:   true,
-				Token:     readLine("  Bot token: "),
-				AllowFrom: config.FlexibleStringSlice{},
+			cfg.Channels.WhatsApp.AllowFrom = config.FlexibleStringSlice{}
+		case 4:
+			cfg.Channels.Slack.Enabled = true
+			cfg.Channels.Slack.BotToken = readLine("  Slack bot token (xoxb-...): ")
+			cfg.Channels.Slack.AppToken = readLine("  Slack app token (xapp-...): ")
+			cfg.Channels.Slack.AllowFrom = config.FlexibleStringSlice{}
+		case 5:
+			cfg.Channels.Feishu.Enabled = true
+			cfg.Channels.Feishu.AppID = readLine("  Feishu app ID: ")
+			cfg.Channels.Feishu.AppSecret = readLine("  Feishu app secret: ")
+			cfg.Channels.Feishu.AllowFrom = config.FlexibleStringSlice{}
+		case 6:
+			cfg.Channels.DingTalk.Enabled = true
+			cfg.Channels.DingTalk.ClientID = readLine("  DingTalk client ID: ")
+			cfg.Channels.DingTalk.ClientSecret = readLine("  DingTalk client secret: ")
+			cfg.Channels.DingTalk.AllowFrom = config.FlexibleStringSlice{}
+		case 7:
+			cfg.Channels.QQ.Enabled = true
+			cfg.Channels.QQ.AppID = readLine("  QQ app ID: ")
+			cfg.Channels.QQ.AppSecret = readLine("  QQ app secret: ")
+			cfg.Channels.QQ.AllowFrom = config.FlexibleStringSlice{}
+		case 8:
+			cfg.Channels.OneBot.Enabled = true
+			cfg.Channels.OneBot.WSUrl = readLine("  OneBot WebSocket URL (default: ws://127.0.0.1:3001): ")
+			if cfg.Channels.OneBot.WSUrl == "" {
+				cfg.Channels.OneBot.WSUrl = "ws://127.0.0.1:3001"
 			}
-			fmt.Println("  Discord channel enabled")
-		default:
-			fmt.Printf("  %s not yet implemented in quick mode, skipping\n", channel)
+			cfg.Channels.OneBot.AccessToken = readLine("  OneBot access token (optional): ")
+			cfg.Channels.OneBot.AllowFrom = config.FlexibleStringSlice{}
+		case 9:
+			cfg.Channels.WeCom.Enabled = true
+			cfg.Channels.WeCom.Token = readLine("  WeCom webhook token: ")
+			cfg.Channels.WeCom.WebhookURL = readLine("  WeCom webhook URL: ")
+			cfg.Channels.WeCom.AllowFrom = config.FlexibleStringSlice{}
+		case 10:
+			cfg.Channels.MaixCam.Enabled = true
+			cfg.Channels.MaixCam.Host = readLine("  MaixCam host (default: 0.0.0.0): ")
+			if cfg.Channels.MaixCam.Host == "" {
+				cfg.Channels.MaixCam.Host = "0.0.0.0"
+			}
+			cfg.Channels.MaixCam.AllowFrom = config.FlexibleStringSlice{}
 		}
 	}
+}
 
-	if err := config.SaveConfig(configPath, cfg); err != nil {
-		fmt.Printf("Error saving config: %v\n", err)
-		os.Exit(1)
+var providerList = []string{
+	"openai",
+	"anthropic",
+	"google",
+	"deepseek",
+	"openrouter",
+	"ollama",
+	"zhipu",
+	"qwen",
+	"moonshot",
+	"groq",
+	"opencode",
+}
+
+var providerModels = map[string][]string{
+	"openai": {
+		"gpt-5.2", "gpt-5.1", "gpt-5", "gpt-5-nano",
+	},
+	"anthropic": {
+		"claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5",
+	},
+	"google": {
+		"gemini-3-pro", "gemini-3-flash", "gemini-3.1-pro",
+	},
+	"deepseek": {
+		"deepseek-chat", "deepseek-v3",
+	},
+	"openrouter": {
+		"openrouter/auto", "openrouter/gpt-5.2",
+	},
+	"ollama": {
+		"llama3", "llama3.1", "mistral", "qwen2.5",
+	},
+	"zhipu": {
+		"glm-5", "glm-5-free", "glm-4.7", "glm-4.6",
+	},
+	"qwen": {
+		"qwen-plus", "qwen-turbo", "qwen-max",
+	},
+	"moonshot": {
+		"moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k",
+	},
+	"groq": {
+		"llama-3.3-70b", "llama-3.1-70b", "mixtral-8x7b",
+	},
+	"opencode": {
+		"glm-5-free", "glm-5", "glm-4.7", "glm-4.6",
+		"minimax-m2.5-free", "minimax-m2.5", "minimax-m2.1",
+		"kimi-k2.5-free", "kimi-k2.5", "kimi-k2", "kimi-k2-thinking",
+		"qwen3-coder", "big-pickle",
+		"gpt-5.2", "gpt-5.1", "gpt-5", "gpt-5-nano",
+		"claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5",
+		"gemini-3-pro", "gemini-3-flash",
+	},
+}
+
+var channelList = []string{
+	"CLI (terminal)",
+	"Telegram",
+	"Discord",
+	"WhatsApp",
+	"Slack",
+	"Feishu (飞书)",
+	"DingTalk (钉钉)",
+	"QQ",
+	"OneBot",
+	"WeCom (企业微信)",
+	"MaixCam",
+}
+
+func modelsToNames(list []config.ModelConfig) []string {
+	result := make([]string, len(list))
+	for i, m := range list {
+		result[i] = m.ModelName
 	}
-
-	fmt.Printf("\nConfig saved to %s\n", configPath)
-}
-
-var providerModels = map[string]string{
-	"openai":     "openai/gpt-5.2",
-	"anthropic":  "anthropic/claude-sonnet-4.6",
-	"google":     "gemini/gemini-2.0-flash-exp",
-	"deepseek":   "deepseek/deepseek-chat",
-	"openrouter": "openrouter/auto",
-	"ollama":     "ollama/llama3",
-	"zhipu":      "zhipu/glm-4.7",
-	"qwen":       "qwen/qwen-plus",
-	"moonshot":   "moonshot/moonshot-v1-8k",
-	"groq":       "groq/llama-3.3-70b-versatile",
-	"opencode":   "opencode/minimax-m2.5-free",
-}
-
-var providerBases = map[string]string{
-	"openai":     "https://api.openai.com/v1",
-	"anthropic":  "https://api.anthropic.com/v1",
-	"google":     "https://generativelanguage.googleapis.com/v1beta",
-	"deepseek":   "https://api.deepseek.com/v1",
-	"openrouter": "https://openrouter.ai/api/v1",
-	"ollama":     "http://localhost:11434/v1",
-	"zhipu":      "https://open.bigmodel.cn/api/paas/v4",
-	"qwen":       "https://dashscope.aliyuncs.com/compatible-mode/v1",
-	"moonshot":   "https://api.moonshot.cn/v1",
-	"groq":       "https://api.groq.com/openai/v1",
-	"opencode":   "https://opencode.ai/zen",
-}
-
-func selectProvider() string {
-	providers := []string{
-		"openai", "anthropic", "google", "deepseek", "openrouter",
-		"ollama", "zhipu", "qwen", "moonshot", "groq", "opencode",
-	}
-	fmt.Println("Select provider:")
-	for i, p := range providers {
-		fmt.Printf("  %d) %s\n", i+1, p)
-	}
-	idx := readChoice("Enter number: ", intToStrings(1, len(providers)))
-	return providers[strToInt(idx)-1]
-}
-
-func selectModelForProvider(provider string) string {
-	return readLineWithDefault("Model name: ", providerModels[provider])
-}
-
-func selectChannel() string {
-	channels := []string{"cli", "telegram"}
-	fmt.Println("Select channel:")
-	for i, c := range channels {
-		fmt.Printf("  %d) %s\n", i+1, c)
-	}
-	idx := readChoice("Enter number: ", []string{"1", "2"})
-	return channels[strToInt(idx)-1]
+	return result
 }
 
 func readLine(prompt string) string {
@@ -247,36 +298,10 @@ func readLine(prompt string) string {
 	return strings.TrimSpace(line)
 }
 
-func readLineWithDefault(prompt, def string) string {
-	fmt.Print(prompt)
+func promptYesNo(prompt string) bool {
+	fmt.Print(prompt + " (y/n): ")
 	reader := bufio.NewReader(os.Stdin)
-	line, _ := reader.ReadString('\n')
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return def
-	}
-	return line
-}
-
-func readChoice(prompt string, valid []string) string {
 	for {
-		fmt.Print(prompt)
-		reader := bufio.NewReader(os.Stdin)
-		line, _ := reader.ReadString('\n')
-		line = strings.TrimSpace(line)
-		for _, v := range valid {
-			if line == v {
-				return line
-			}
-		}
-		fmt.Printf("Invalid choice. Valid options: %s\n", strings.Join(valid, ", "))
-	}
-}
-
-func readYesNo(prompt string) bool {
-	for {
-		fmt.Print(prompt)
-		reader := bufio.NewReader(os.Stdin)
 		line, _ := reader.ReadString('\n')
 		line = strings.ToLower(strings.TrimSpace(line))
 		if line == "y" || line == "yes" {
@@ -288,18 +313,262 @@ func readYesNo(prompt string) bool {
 	}
 }
 
-func intToStrings(from, to int) []string {
-	result := make([]string, to-from+1)
-	for i := from; i <= to; i++ {
-		result[i-from] = fmt.Sprintf("%d", i)
+func promptChoice(options []string) int {
+	if runtime.GOOS == "windows" {
+		return promptChoiceSimple(options)
+	}
+	return promptChoiceTUI(options)
+}
+
+func promptSelect(prompt, provider string) string {
+	models := providerModels[provider]
+	if runtime.GOOS == "windows" {
+		return promptSelectSimple(prompt, models)
+	}
+	idx := promptSelectTUI(prompt, models)
+	return models[idx]
+}
+
+func promptSelectIndex(prompt string, options []string) int {
+	if runtime.GOOS == "windows" {
+		return promptSelectIndexSimple(prompt, options)
+	}
+	return promptSelectTUI(prompt, options)
+}
+
+func promptMultiSelect(options []string) []int {
+	if runtime.GOOS == "windows" {
+		return promptMultiSelectSimple(options)
+	}
+	return promptMultiSelectTUI(options)
+}
+
+func promptMultiSelectIndex(options []string) []int {
+	if runtime.GOOS == "windows" {
+		return promptMultiSelectIndexSimple(options)
+	}
+	return promptMultiSelectIndexTUI(options)
+}
+
+func promptChoiceSimple(options []string) int {
+	for i, opt := range options {
+		fmt.Printf("  %d) %s\n", i+1, opt)
+	}
+	fmt.Print("Enter choice: ")
+	var n int
+	fmt.Scanln(&n)
+	if n < 1 || n > len(options) {
+		return 0
+	}
+	return n - 1
+}
+
+func promptSelectSimple(prompt string, models []string) string {
+	fmt.Println(prompt)
+	for i, m := range models {
+		fmt.Printf("  %d) %s\n", i+1, m)
+	}
+	fmt.Print("Select: ")
+	var n int
+	fmt.Scanln(&n)
+	if n < 1 || n > len(models) {
+		return models[0]
+	}
+	return models[n-1]
+}
+
+func promptSelectIndexSimple(prompt string, options []string) int {
+	fmt.Println(prompt)
+	for i, opt := range options {
+		fmt.Printf("  %d) %s\n", i+1, opt)
+	}
+	fmt.Print("Select: ")
+	var n int
+	fmt.Scanln(&n)
+	if n < 1 || n > len(options) {
+		return 0
+	}
+	return n - 1
+}
+
+func promptMultiSelectSimple(options []string) []int {
+	for i, opt := range options {
+		fmt.Printf("  %d) %s\n", i+1, opt)
+	}
+	fmt.Print("Enter numbers (comma-separated): ")
+	reader := bufio.NewReader(os.Stdin)
+	line, _ := reader.ReadString('\n')
+
+	var result []int
+	for _, part := range strings.Split(line, ",") {
+		var n int
+		fmt.Sscanf(strings.TrimSpace(part), "%d", &n)
+		if n >= 1 && n <= len(options) {
+			result = append(result, n-1)
+		}
 	}
 	return result
 }
 
-func strToInt(s string) int {
-	var n int
-	fmt.Sscanf(s, "%d", &n)
-	return n
+func promptMultiSelectIndexSimple(options []string) []int {
+	return promptMultiSelectSimple(options)
+}
+
+func promptChoiceTUI(options []string) int {
+	selected := 0
+
+	printMenu := func() {
+		clearScreen()
+		fmt.Println("Use arrow keys to navigate, Enter to select.")
+		fmt.Println("")
+		for i, opt := range options {
+			if i == selected {
+				fmt.Printf("  > %s\n", opt)
+			} else {
+				fmt.Printf("    %s\n", opt)
+			}
+		}
+	}
+
+	printMenu()
+
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		char, _, err := reader.ReadRune()
+		if err != nil {
+			return 0
+		}
+
+		switch char {
+		case '\033':
+			next, _, _ := reader.ReadRune()
+			if next == '[' {
+				dir, _, _ := reader.ReadRune()
+				if dir == 'A' && selected > 0 {
+					selected--
+				} else if dir == 'B' && selected < len(options)-1 {
+					selected++
+				}
+			}
+		case '\n', '\r':
+			clearScreen()
+			return selected
+		}
+		printMenu()
+	}
+}
+
+func promptSelectTUI(prompt string, models []string) int {
+	selected := 0
+
+	printMenu := func() {
+		clearScreen()
+		fmt.Println(prompt)
+		fmt.Println("(Use arrow keys, Enter to select)")
+		fmt.Println("")
+		for i, m := range models {
+			if i == selected {
+				fmt.Printf("  > %s\n", m)
+			} else {
+				fmt.Printf("    %s\n", m)
+			}
+		}
+	}
+
+	printMenu()
+
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		char, _, err := reader.ReadRune()
+		if err != nil {
+			return 0
+		}
+
+		switch char {
+		case '\033':
+			next, _, _ := reader.ReadRune()
+			if next == '[' {
+				dir, _, _ := reader.ReadRune()
+				if dir == 'A' && selected > 0 {
+					selected--
+				} else if dir == 'B' && selected < len(models)-1 {
+					selected++
+				}
+			}
+		case '\n', '\r':
+			clearScreen()
+			return selected
+		}
+		printMenu()
+	}
+}
+
+func promptMultiSelectTUI(options []string) []int {
+	selected := make([]bool, len(options))
+	cur := 0
+
+	printMenu := func() {
+		clearScreen()
+		fmt.Println("Select (space to toggle, Enter to confirm):")
+		fmt.Println("")
+		for i, opt := range options {
+			mark := " "
+			if selected[i] {
+				mark = "x"
+			}
+			if i == cur {
+				fmt.Printf("  [%s] %s\n", mark, opt)
+			} else {
+				fmt.Printf("  [%s] %s\n", mark, opt)
+			}
+		}
+	}
+
+	printMenu()
+
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		char, _, err := reader.ReadRune()
+		if err != nil {
+			return []int{0}
+		}
+
+		switch char {
+		case '\033':
+			next, _, _ := reader.ReadRune()
+			if next == '[' {
+				dir, _, _ := reader.ReadRune()
+				if dir == 'A' && cur > 0 {
+					cur--
+				} else if dir == 'B' && cur < len(options)-1 {
+					cur++
+				}
+			}
+		case ' ':
+			selected[cur] = !selected[cur]
+		case '\n', '\r':
+			clearScreen()
+			var result []int
+			for i, s := range selected {
+				if s {
+					result = append(result, i)
+				}
+			}
+			if len(result) == 0 {
+				result = []int{cur}
+			}
+			return result
+		}
+		printMenu()
+	}
+}
+
+func promptMultiSelectIndexTUI(options []string) []int {
+	return promptMultiSelectTUI(options)
+}
+
+func clearScreen() {
+	fmt.Print("\033[2J\033[H")
 }
 
 func getWorkspacePath() string {
@@ -307,41 +576,40 @@ func getWorkspacePath() string {
 	return filepath.Join(home, ".picoclaw", "workspace")
 }
 
+func createWorkspaceTemplates(workspace string) {
+	err := copyEmbeddedToTarget(workspace)
+	if err != nil {
+		fmt.Printf("Error copying workspace templates: %v\n", err)
+	}
+}
+
 func copyEmbeddedToTarget(targetDir string) error {
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
-		return fmt.Errorf("Failed to create target directory: %w", err)
+		return fmt.Errorf("failed to create target directory: %w", err)
 	}
 
-	err := fs.WalkDir(embeddedFiles, "workspace", func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(embeddedWorkspace, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
 			return nil
 		}
-		data, err := embeddedFiles.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("Failed to read embedded file %s: %w", path, err)
+		if path == "." {
+			return nil
 		}
-		newPath, err := filepath.Rel("workspace", path)
+		data, err := embeddedWorkspace.ReadFile(path)
 		if err != nil {
-			return fmt.Errorf("Failed to get relative path for %s: %v\n", path, err)
+			return fmt.Errorf("failed to read embedded file %s: %w", path, err)
 		}
-		targetPath := filepath.Join(targetDir, newPath)
+		targetPath := filepath.Join(targetDir, path)
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-			return fmt.Errorf("Failed to create directory %s: %w", filepath.Dir(targetPath), err)
+			return fmt.Errorf("failed to create directory %s: %w", filepath.Dir(targetPath), err)
 		}
 		if err := os.WriteFile(targetPath, data, 0o644); err != nil {
-			return fmt.Errorf("Failed to write file %s: %w", targetPath, err)
+			return fmt.Errorf("failed to write file %s: %w", targetPath, err)
 		}
 		return nil
 	})
 	return err
-}
-
-func createWorkspaceTemplates(workspace string) {
-	err := copyEmbeddedToTarget(workspace)
-	if err != nil {
-		fmt.Printf("Error copying workspace templates: %v\n", err)
-	}
 }
