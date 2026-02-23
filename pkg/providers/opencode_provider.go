@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	opencodeBaseURL      = "https://opencode.ai/zen"
+	opencodeBaseURL      = "https://opencode.ai/zen/v1"
 	opencodeDefaultModel = "qwen3-coder"
 	opencodeUserAgent    = "picoclaw/1.0"
 )
@@ -131,6 +131,14 @@ func (p *OpenCodeProvider) Chat(
 		// Default to chat/completions (MiniMax, GLM, Kimi, Qwen, Big Pickle)
 		apiURL = p.apiBase + "/v1/chat/completions"
 	}
+
+	// Debug: log request details
+	logger.DebugCF("provider.opencode", "Request", map[string]any{
+		"url":    apiURL,
+		"model":  model,
+		"header": "Bearer " + p.apiKey[:min(10, len(p.apiKey))] + "...",
+	})
+
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
