@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	opencodeBaseURL      = "https://api.opencode.ai"
+	opencodeBaseURL      = "https://opencode.ai/zen"
 	opencodeDefaultModel = "qwen3-coder"
 	opencodeUserAgent    = "picoclaw/1.0"
 )
