@@ -137,7 +137,7 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 		}
 		apiBase := cfg.APIBase
 		if apiBase == "" {
-			apiBase = "https://api.opencode.ai/v1"
+			apiBase = "https://opencode.ai/zen"
 		}
 		return NewOpenCodeProvider(cfg.APIKey, apiBase), modelID, nil
 
@@ -207,7 +207,7 @@ func getDefaultAPIBase(protocol string) string {
 	case "vllm":
 		return "http://localhost:8000/v1"
 	case "opencode":
-		return "https://api.opencode.ai/v1"
+		return "https://opencode.ai/zen"
 	default:
 		return ""
 	}
