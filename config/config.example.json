@@ -3,7 +3,7 @@
     "defaults": {
       "workspace": "~/.picoclaw/workspace",
       "restrict_to_workspace": true,
-      "model": "gpt4",
+      "model": "opencode-qwen3",
       "max_tokens": 8192,
       "temperature": 0.7,
       "max_tool_iterations": 20
@@ -17,40 +17,154 @@
       "api_base": "https://api.openai.com/v1"
     },
     {
-      "model_name": "opencode-qwen",
-      "model": "opencode/qwen-3-coder-480b",
+      "model_name": "opencode-qwen3",
+      "model": "opencode/qwen3-coder",
       "api_key": "oc_your-opencode-key"
     },
     {
-      "model_name": "opencode-sonnet",
-      "model": "opencode/claude-sonnet-4",
+      "model_name": "opencode-gpt5",
+      "model": "opencode/gpt-5",
       "api_key": "oc_your-opencode-key"
     },
     {
-      "model_name": "claude-sonnet-4.6",
-      "model": "anthropic/claude-sonnet-4.6",
-      "api_key": "sk-ant-your-key",
-      "api_base": "https://api.anthropic.com/v1"
+      "model_name": "opencode-gpt52",
+      "model": "opencode/gpt-5.2",
+      "api_key": "oc_your-opencode-key"
     },
     {
-      "model_name": "gemini-flash",
+      "model_name": "opencode-gpt52-codex",
+      "model": "opencode/gpt-5.2-codex",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-gpt51",
+      "model": "opencode/gpt-5.1",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-gpt51-codex",
+      "model": "opencode/gpt-5.1-codex",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-gpt5-nano",
+      "model": "opencode/gpt-5-nano",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-sonnet46",
+      "model": "opencode/claude-sonnet-4-6",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-sonnet45",
+      "model": "opencode/claude-sonnet-4-5",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-opus46",
+      "model": "opencode/claude-opus-4-6",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-opus45",
+      "model": "opencode/claude-opus-4-5",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-haiku45",
+      "model": "opencode/claude-haiku-4-5",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-gemini3-pro",
+      "model": "opencode/gemini-3-pro",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-gemini3-flash",
+      "model": "opencode/gemini-3-flash",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-gemini31-pro",
+      "model": "opencode/gemini-3.1-pro",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-minimax-m25",
+      "model": "opencode/minimax-m2.5",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-minimax-m25-free",
+      "model": "opencode/minimax-m2.5-free",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-minimax-m21",
+      "model": "opencode/minimax-m2.1",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-glm5",
+      "model": "opencode/glm-5",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-glm5-free",
+      "model": "opencode/glm-5-free",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-glm47",
+      "model": "opencode/glm-4.7",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-glm46",
+      "model": "opencode/glm-4.6",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-kimi-k25",
+      "model": "opencode/kimi-k2.5",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-kimi-k25-free",
+      "model": "opencode/kimi-k2.5-free",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-kimi-k2-thinking",
+      "model": "opencode/kimi-k2-thinking",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-kimi-k2",
+      "model": "opencode/kimi-k2",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "opencode-big-pickle",
+      "model": "opencode/big-pickle",
+      "api_key": "oc_your-opencode-key"
+    },
+    {
+      "model_name": "antigravity-gemini-flash",
       "model": "antigravity/gemini-3-flash",
       "auth_method": "oauth"
     },
     {
-      "model_name": "gemini-pro",
+      "model_name": "antigravity-gemini-pro",
       "model": "antigravity/gemini-3-pro",
       "auth_method": "oauth"
     },
     {
-      "model_name": "claude-opus-thinking",
+      "model_name": "antigravity-claude-opus-thinking",
       "model": "antigravity/claude-opus-4.6-thinking",
       "auth_method": "oauth"
-    },
-    {
-      "model_name": "gemini-flash-thinking",
-      "model": "antigravity/gemini-3-flash",
-      "variant": "high"
     },
     {
       "model_name": "deepseek",

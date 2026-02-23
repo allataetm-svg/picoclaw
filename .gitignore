@@ -35,3 +35,6 @@ tasks/
 
 # Added by goreleaser init:
 dist/
+
+# Development notes
+DEV/

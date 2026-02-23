@@ -15,10 +15,61 @@ import (
 )
 
 const (
-	opencodeBaseURL      = "https://api.opencode.ai/v1"
-	opencodeDefaultModel = "qwen-3-coder-480b"
+	opencodeBaseURL      = "https://opencode.ai/zen"
+	opencodeDefaultModel = "qwen3-coder"
 	opencodeUserAgent    = "picoclaw/1.0"
 )
+
+var opencodeModels = map[string]OpenCodeModel{
+	// GPT Models (uses /v1/responses)
+	"gpt-5.2":            {ID: "gpt-5.2", Name: "GPT 5.2", Endpoint: "/v1/responses", APIPackage: "@ai-sdk/openai"},
+	"gpt-5.2-codex":      {ID: "gpt-5.2-codex", Name: "GPT 5.2 Codex", Endpoint: "/v1/responses", APIPackage: "@ai-sdk/openai"},
+	"gpt-5.1":            {ID: "gpt-5.1", Name: "GPT 5.1", Endpoint: "/v1/responses", APIPackage: "@ai-sdk/openai"},
+	"gpt-5.1-codex":      {ID: "gpt-5.1-codex", Name: "GPT 5.1 Codex", Endpoint: "/v1/responses", APIPackage: "@ai-sdk/openai"},
+	"gpt-5.1-codex-max":  {ID: "gpt-5.1-codex-max", Name: "GPT 5.1 Codex Max", Endpoint: "/v1/responses", APIPackage: "@ai-sdk/openai"},
+	"gpt-5.1-codex-mini": {ID: "gpt-5.1-codex-mini", Name: "GPT 5.1 Codex Mini", Endpoint: "/v1/responses", APIPackage: "@ai-sdk/openai"},
+	"gpt-5":              {ID: "gpt-5", Name: "GPT 5", Endpoint: "/v1/responses", APIPackage: "@ai-sdk/openai"},
+	"gpt-5-codex":        {ID: "gpt-5-codex", Name: "GPT 5 Codex", Endpoint: "/v1/responses", APIPackage: "@ai-sdk/openai"},
+	"gpt-5-nano":         {ID: "gpt-5-nano", Name: "GPT 5 Nano", Endpoint: "/v1/responses", APIPackage: "@ai-sdk/openai", Free: true},
+
+	// Claude Models (uses /v1/messages)
+	"claude-opus-4-6":   {ID: "claude-opus-4-6", Name: "Claude Opus 4.6", Endpoint: "/v1/messages", APIPackage: "@ai-sdk/anthropic"},
+	"claude-opus-4-5":   {ID: "claude-opus-4-5", Name: "Claude Opus 4.5", Endpoint: "/v1/messages", APIPackage: "@ai-sdk/anthropic"},
+	"claude-opus-4-1":   {ID: "claude-opus-4-1", Name: "Claude Opus 4.1", Endpoint: "/v1/messages", APIPackage: "@ai-sdk/anthropic"},
+	"claude-sonnet-4-6": {ID: "claude-sonnet-4-6", Name: "Claude Sonnet 4.6", Endpoint: "/v1/messages", APIPackage: "@ai-sdk/anthropic"},
+	"claude-sonnet-4-5": {ID: "claude-sonnet-4-5", Name: "Claude Sonnet 4.5", Endpoint: "/v1/messages", APIPackage: "@ai-sdk/anthropic"},
+	"claude-sonnet-4":   {ID: "claude-sonnet-4", Name: "Claude Sonnet 4", Endpoint: "/v1/messages", APIPackage: "@ai-sdk/anthropic"},
+	"claude-haiku-4-5":  {ID: "claude-haiku-4-5", Name: "Claude Haiku 4.5", Endpoint: "/v1/messages", APIPackage: "@ai-sdk/anthropic"},
+	"claude-3-5-haiku":  {ID: "claude-3-5-haiku", Name: "Claude Haiku 3.5", Endpoint: "/v1/messages", APIPackage: "@ai-sdk/anthropic"},
+
+	// Gemini Models (uses /v1/models/{model})
+	"gemini-3.1-pro": {ID: "gemini-3.1-pro", Name: "Gemini 3.1 Pro", Endpoint: "/v1/models/gemini-3.1-pro", APIPackage: "@ai-sdk/google"},
+	"gemini-3-pro":   {ID: "gemini-3-pro", Name: "Gemini 3 Pro", Endpoint: "/v1/models/gemini-3-pro", APIPackage: "@ai-sdk/google"},
+	"gemini-3-flash": {ID: "gemini-3-flash", Name: "Gemini 3 Flash", Endpoint: "/v1/models/gemini-3-flash", APIPackage: "@ai-sdk/google"},
+
+	// OpenAI-Compatible Models (uses /v1/chat/completions)
+	"minimax-m2.5":      {ID: "minimax-m2.5", Name: "MiniMax M2.5", Endpoint: "/v1/chat/completions", APIPackage: "@ai-sdk/openai-compatible"},
+	"minimax-m2.5-free": {ID: "minimax-m2.5-free", Name: "MiniMax M2.5 Free", Endpoint: "/v1/chat/completions", APIPackage: "@ai-sdk/openai-compatible", Free: true},
+	"minimax-m2.1":      {ID: "minimax-m2.1", Name: "MiniMax M2.1", Endpoint: "/v1/chat/completions", APIPackage: "@ai-sdk/openai-compatible"},
+	"glm-5":             {ID: "glm-5", Name: "GLM 5", Endpoint: "/v1/chat/completions", APIPackage: "@ai-sdk/openai-compatible"},
+	"glm-5-free":        {ID: "glm-5-free", Name: "GLM 5 Free", Endpoint: "/v1/chat/completions", APIPackage: "@ai-sdk/openai-compatible", Free: true},
+	"glm-4.7":           {ID: "glm-4.7", Name: "GLM 4.7", Endpoint: "/v1/chat/completions", APIPackage: "@ai-sdk/openai-compatible"},
+	"glm-4.6":           {ID: "glm-4.6", Name: "GLM 4.6", Endpoint: "/v1/chat/completions", APIPackage: "@ai-sdk/openai-compatible"},
+	"kimi-k2.5":         {ID: "kimi-k2.5", Name: "Kimi K2.5", Endpoint: "/v1/chat/completions", APIPackage: "@ai-sdk/openai-compatible"},
+	"kimi-k2.5-free":    {ID: "kimi-k2.5-free", Name: "Kimi K2.5 Free", Endpoint: "/v1/chat/completions", APIPackage: "@ai-sdk/openai-compatible", Free: true},
+	"kimi-k2-thinking":  {ID: "kimi-k2-thinking", Name: "Kimi K2 Thinking", Endpoint: "/v1/chat/completions", APIPackage: "@ai-sdk/openai-compatible"},
+	"kimi-k2":           {ID: "kimi-k2", Name: "Kimi K2", Endpoint: "/v1/chat/completions", APIPackage: "@ai-sdk/openai-compatible"},
+	"qwen3-coder":       {ID: "qwen3-coder", Name: "Qwen3 Coder 480B", Endpoint: "/v1/chat/completions", APIPackage: "@ai-sdk/openai-compatible"},
+	"big-pickle":        {ID: "big-pickle", Name: "Big Pickle", Endpoint: "/v1/chat/completions", APIPackage: "@ai-sdk/openai-compatible", Free: true},
+}
+
+type OpenCodeModel struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Endpoint   string `json:"endpoint"`
+	APIPackage string `json:"api_package"`
+	Free       bool   `json:"free"`
+}
 
 type OpenCodeProvider struct {
 	apiKey     string
@@ -51,13 +102,35 @@ func (p *OpenCodeProvider) Chat(
 	}
 	model = strings.TrimPrefix(model, "opencode/")
 
+	// Get model info for endpoint
+	modelInfo := opencodeModels[model]
+	if modelInfo.Endpoint == "" {
+		modelInfo.Endpoint = "/v1/chat/completions" // Default
+	}
+
 	reqBody := p.buildOpenAIRequest(messages, tools, model, options)
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling request: %w", err)
 	}
 
-	apiURL := fmt.Sprintf("%s/chat/completions", p.apiBase)
+	// Determine endpoint based on model type
+	// Most models use /v1/chat/completions, but some need different endpoints
+	var apiURL string
+	switch {
+	case strings.HasPrefix(modelInfo.Endpoint, "/v1/models/"):
+		// Gemini models - handled separately
+		apiURL = p.apiBase + modelInfo.Endpoint + ":generateContent"
+	case modelInfo.Endpoint == "/v1/messages":
+		// Claude models - use messages endpoint
+		apiURL = p.apiBase + modelInfo.Endpoint
+	case modelInfo.Endpoint == "/v1/responses":
+		// GPT models - use responses endpoint
+		apiURL = p.apiBase + modelInfo.Endpoint
+	default:
+		// Default to chat/completions (MiniMax, GLM, Kimi, Qwen, Big Pickle)
+		apiURL = p.apiBase + "/v1/chat/completions"
+	}
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
@@ -376,4 +449,19 @@ func (p *OpenCodeProvider) parseSSEResponse(body string) (*LLMResponse, error) {
 		FinishReason: finishReason,
 		Usage:        usage,
 	}, nil
+}
+
+func GetOpenCodeModels() []OpenCodeModel {
+	models := make([]OpenCodeModel, 0, len(opencodeModels))
+	for _, m := range opencodeModels {
+		models = append(models, m)
+	}
+	return models
+}
+
+func GetOpenCodeModel(modelID string) *OpenCodeModel {
+	if m, ok := opencodeModels[modelID]; ok {
+		return &m
+	}
+	return nil
 }
