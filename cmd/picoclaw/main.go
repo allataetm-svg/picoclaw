@@ -109,8 +109,6 @@ func main() {
 		gatewayCmd()
 	case "status":
 		statusCmd()
-	case "migrate":
-		migrateCmd()
 	case "auth":
 		authCmd()
 	case "cron":
@@ -131,7 +129,6 @@ func main() {
 
 		workspace := cfg.WorkspacePath()
 		installer := skills.NewSkillInstaller(workspace)
-		// 获取全局配置目录和内置 skills 目录
 		globalDir := filepath.Dir(getConfigPath())
 		globalSkillsDir := filepath.Join(globalDir, "skills")
 		builtinSkillsDir := filepath.Join(globalDir, "picoclaw", "skills")
@@ -164,9 +161,11 @@ func main() {
 			fmt.Printf("Unknown skills command: %s\n", subcommand)
 			skillsHelp()
 		}
-	case "version", "--version", "-v":
-		printVersion()
 	default:
+		if command == "--version" || command == "-v" {
+			printVersion()
+			return
+		}
 		fmt.Printf("Unknown command: %s\n", command)
 		printHelp()
 		os.Exit(1)
@@ -184,9 +183,10 @@ func printHelp() {
 	fmt.Println("  gateway     Start picoclaw gateway")
 	fmt.Println("  status      Show picoclaw status")
 	fmt.Println("  cron        Manage scheduled tasks")
-	fmt.Println("  migrate     Migrate from OpenClaw to PicoClaw")
 	fmt.Println("  skills      Manage skills (install, list, remove)")
-	fmt.Println("  version     Show version information")
+	fmt.Println()
+	fmt.Println("Flags:")
+	fmt.Println("  --version, -v   Show version information")
 }
 
 func getConfigPath() string {
