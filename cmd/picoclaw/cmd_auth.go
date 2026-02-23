@@ -864,14 +864,14 @@ func configureAPIKeyProvider(p ProviderInfo) {
 		}
 		if !found {
 			appCfg.ModelList = append(appCfg.ModelList, config.ModelConfig{
-				ModelName:  "opencode-qwen3",
-				Model:      "opencode/qwen3-coder",
+				ModelName:  "glm-5-free",
+				Model:      "opencode/glm-5-free",
 				APIKey:     apiKey,
 				AuthMethod: "token",
 			})
 		}
 		if appCfg.Agents.Defaults.Model == "" {
-			appCfg.Agents.Defaults.Model = "opencode-qwen3"
+			appCfg.Agents.Defaults.Model = "glm-5-free"
 		}
 		fmt.Printf("  ✓ API key saved for %s\n", p.Name)
 	}
