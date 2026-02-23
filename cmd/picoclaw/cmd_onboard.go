@@ -10,7 +10,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/sipeed/picoclaw/pkg/config"
@@ -314,40 +313,24 @@ func promptYesNo(prompt string) bool {
 }
 
 func promptChoice(options []string) int {
-	if runtime.GOOS == "windows" {
-		return promptChoiceSimple(options)
-	}
 	return promptChoiceTUI(options)
 }
 
 func promptSelect(prompt, provider string) string {
 	models := providerModels[provider]
-	if runtime.GOOS == "windows" {
-		return promptSelectSimple(prompt, models)
-	}
-	idx := promptSelectTUI(prompt, models)
-	return models[idx]
+	return promptSelectSimple(prompt, models)
 }
 
 func promptSelectIndex(prompt string, options []string) int {
-	if runtime.GOOS == "windows" {
-		return promptSelectIndexSimple(prompt, options)
-	}
-	return promptSelectTUI(prompt, options)
+	return promptSelectIndexSimple(prompt, options)
 }
 
 func promptMultiSelect(options []string) []int {
-	if runtime.GOOS == "windows" {
-		return promptMultiSelectSimple(options)
-	}
-	return promptMultiSelectTUI(options)
+	return promptMultiSelectSimple(options)
 }
 
 func promptMultiSelectIndex(options []string) []int {
-	if runtime.GOOS == "windows" {
-		return promptMultiSelectIndexSimple(options)
-	}
-	return promptMultiSelectIndexTUI(options)
+	return promptMultiSelectIndexSimple(options)
 }
 
 func promptChoiceSimple(options []string) int {
@@ -415,151 +398,102 @@ func promptMultiSelectIndexSimple(options []string) []int {
 }
 
 func promptChoiceTUI(options []string) int {
-	selected := 0
-
-	printMenu := func() {
-		clearScreen()
-		fmt.Println("Use arrow keys to navigate, Enter to select.")
+	for {
+		fmt.Println("\nUse arrow keys to navigate, Enter to select.")
+		fmt.Println("(or press 1-" + fmt.Sprint(len(options)) + " then Enter)")
 		fmt.Println("")
 		for i, opt := range options {
-			if i == selected {
-				fmt.Printf("  > %s\n", opt)
-			} else {
-				fmt.Printf("    %s\n", opt)
-			}
+			fmt.Printf("  %d) %s\n", i+1, opt)
 		}
-	}
+		fmt.Print("> ")
 
-	printMenu()
+		reader := bufio.NewReader(os.Stdin)
+		line, _ := reader.ReadString('\n')
+		line = strings.TrimSpace(line)
 
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		char, _, err := reader.ReadRune()
-		if err != nil {
-			return 0
-		}
-
-		switch char {
-		case '\033':
-			next, _, _ := reader.ReadRune()
-			if next == '[' {
-				dir, _, _ := reader.ReadRune()
-				if dir == 'A' && selected > 0 {
-					selected--
-				} else if dir == 'B' && selected < len(options)-1 {
-					selected++
+		if line != "" {
+			var n int
+			if _, err := fmt.Sscanf(line, "%d", &n); err == nil {
+				if n >= 1 && n <= len(options) {
+					return n - 1
 				}
 			}
-		case '\n', '\r':
-			clearScreen()
-			return selected
+			fmt.Println("Invalid choice, try again.")
+			continue
 		}
-		printMenu()
+		return 0
 	}
 }
 
 func promptSelectTUI(prompt string, models []string) int {
-	selected := 0
-
-	printMenu := func() {
-		clearScreen()
-		fmt.Println(prompt)
-		fmt.Println("(Use arrow keys, Enter to select)")
+	for {
+		fmt.Println("\n" + prompt)
+		fmt.Println("(enter number 1-" + fmt.Sprint(len(models)) + ")")
 		fmt.Println("")
 		for i, m := range models {
-			if i == selected {
-				fmt.Printf("  > %s\n", m)
-			} else {
-				fmt.Printf("    %s\n", m)
-			}
+			fmt.Printf("  %d) %s\n", i+1, m)
 		}
-	}
+		fmt.Print("> ")
 
-	printMenu()
+		reader := bufio.NewReader(os.Stdin)
+		line, _ := reader.ReadString('\n')
+		line = strings.TrimSpace(line)
 
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		char, _, err := reader.ReadRune()
-		if err != nil {
-			return 0
-		}
-
-		switch char {
-		case '\033':
-			next, _, _ := reader.ReadRune()
-			if next == '[' {
-				dir, _, _ := reader.ReadRune()
-				if dir == 'A' && selected > 0 {
-					selected--
-				} else if dir == 'B' && selected < len(models)-1 {
-					selected++
+		if line != "" {
+			var n int
+			if _, err := fmt.Sscanf(line, "%d", &n); err == nil {
+				if n >= 1 && n <= len(models) {
+					return n - 1
 				}
 			}
-		case '\n', '\r':
-			clearScreen()
-			return selected
+			fmt.Println("Invalid choice, try again.")
+			continue
 		}
-		printMenu()
+		return 0
 	}
 }
 
 func promptMultiSelectTUI(options []string) []int {
 	selected := make([]bool, len(options))
-	cur := 0
 
-	printMenu := func() {
-		clearScreen()
-		fmt.Println("Select (space to toggle, Enter to confirm):")
+	for {
+		fmt.Println("\nSelect (space to toggle, Enter to confirm)")
+		fmt.Println("(or enter numbers separated by commas, e.g., 1,3,5)")
 		fmt.Println("")
 		for i, opt := range options {
 			mark := " "
 			if selected[i] {
 				mark = "x"
 			}
-			if i == cur {
-				fmt.Printf("  [%s] %s\n", mark, opt)
-			} else {
-				fmt.Printf("  [%s] %s\n", mark, opt)
-			}
+			fmt.Printf("  [%s] %d) %s\n", mark, i+1, opt)
 		}
-	}
+		fmt.Print("> ")
 
-	printMenu()
+		reader := bufio.NewReader(os.Stdin)
+		line, _ := reader.ReadString('\n')
+		line = strings.TrimSpace(line)
 
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		char, _, err := reader.ReadRune()
-		if err != nil {
-			return []int{0}
-		}
-
-		switch char {
-		case '\033':
-			next, _, _ := reader.ReadRune()
-			if next == '[' {
-				dir, _, _ := reader.ReadRune()
-				if dir == 'A' && cur > 0 {
-					cur--
-				} else if dir == 'B' && cur < len(options)-1 {
-					cur++
+		if line != "" {
+			selected = make([]bool, len(options))
+			for _, part := range strings.Split(line, ",") {
+				var n int
+				if _, err := fmt.Sscanf(strings.TrimSpace(part), "%d", &n); err == nil {
+					if n >= 1 && n <= len(options) {
+						selected[n-1] = true
+					}
 				}
 			}
-		case ' ':
-			selected[cur] = !selected[cur]
-		case '\n', '\r':
-			clearScreen()
 			var result []int
 			for i, s := range selected {
 				if s {
 					result = append(result, i)
 				}
 			}
-			if len(result) == 0 {
-				result = []int{cur}
+			if len(result) > 0 {
+				return result
 			}
-			return result
 		}
-		printMenu()
+		fmt.Println("Invalid selection, try again.")
 	}
 }
 
