@@ -17,6 +17,7 @@ import (
 type AgentInstance struct {
 	ID             string
 	Name           string
+	Description    string
 	Model          string
 	Fallbacks      []string
 	Workspace      string
@@ -28,8 +29,13 @@ type AgentInstance struct {
 	Sessions       *session.SessionManager
 	ContextBuilder *ContextBuilder
 	Tools          *tools.ToolRegistry
+	MemoryStore    *MemoryStore
 	Subagents      *config.SubagentsConfig
 	SkillsFilter   []string
+	SkillWhitelist bool
+	Capabilities   []string
+	TeamLeader     bool
+	TeamMembers    []string
 	Candidates     []providers.FallbackCandidate
 }
 
@@ -63,14 +69,24 @@ func NewAgentInstance(
 
 	agentID := routing.DefaultAgentID
 	agentName := ""
+	agentDesc := ""
 	var subagents *config.SubagentsConfig
 	var skillsFilter []string
+	skillWhitelist := false
+	var capabilities []string
+	teamLeader := false
+	var teamMembers []string
 
 	if agentCfg != nil {
 		agentID = routing.NormalizeAgentID(agentCfg.ID)
 		agentName = agentCfg.Name
+		agentDesc = agentCfg.Description
 		subagents = agentCfg.Subagents
 		skillsFilter = agentCfg.Skills
+		skillWhitelist = agentCfg.SkillWhitelist
+		capabilities = agentCfg.Capabilities
+		teamLeader = agentCfg.TeamLeader
+		teamMembers = agentCfg.TeamMembers
 	}
 
 	maxIter := defaults.MaxToolIterations
@@ -98,6 +114,7 @@ func NewAgentInstance(
 	return &AgentInstance{
 		ID:             agentID,
 		Name:           agentName,
+		Description:    agentDesc,
 		Model:          model,
 		Fallbacks:      fallbacks,
 		Workspace:      workspace,
@@ -109,8 +126,13 @@ func NewAgentInstance(
 		Sessions:       sessionsManager,
 		ContextBuilder: contextBuilder,
 		Tools:          toolsRegistry,
+		MemoryStore:    NewMemoryStoreWithAgent(workspace, agentID),
 		Subagents:      subagents,
 		SkillsFilter:   skillsFilter,
+		SkillWhitelist: skillWhitelist,
+		Capabilities:   capabilities,
+		TeamLeader:     teamLeader,
+		TeamMembers:    teamMembers,
 		Candidates:     candidates,
 	}
 }

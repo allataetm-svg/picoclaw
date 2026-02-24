@@ -17,25 +17,52 @@ import (
 // MemoryStore manages persistent memory for the agent.
 // - Long-term memory: memory/MEMORY.md
 // - Daily notes: memory/YYYYMM/YYYYMMDD.md
+// - Agent-specific memory: memory/agents/{agent_id}.md
+// - Shared knowledge base: memory/shared/
+// - Learned facts: memory/facts.json
 type MemoryStore struct {
 	workspace  string
 	memoryDir  string
 	memoryFile string
+	agentID    string
+	sharedDir  string
+	factsFile  string
+}
+
+// Fact represents a learned fact by an agent
+type Fact struct {
+	ID        string   `json:"id"`
+	Content   string   `json:"content"`
+	Source    string   `json:"source"`
+	AgentIDs  []string `json:"agent_ids"`
+	CreatedAt int64    `json:"created_at"`
+	Tags      []string `json:"tags"`
 }
 
 // NewMemoryStore creates a new MemoryStore with the given workspace path.
 // It ensures the memory directory exists.
 func NewMemoryStore(workspace string) *MemoryStore {
+	return NewMemoryStoreWithAgent(workspace, "")
+}
+
+// NewMemoryStoreWithAgent creates a MemoryStore for a specific agent.
+func NewMemoryStoreWithAgent(workspace, agentID string) *MemoryStore {
 	memoryDir := filepath.Join(workspace, "memory")
 	memoryFile := filepath.Join(memoryDir, "MEMORY.md")
+	sharedDir := filepath.Join(memoryDir, "shared")
+	factsFile := filepath.Join(memoryDir, "facts.json")
 
 	// Ensure memory directory exists
 	os.MkdirAll(memoryDir, 0o755)
+	os.MkdirAll(sharedDir, 0o755)
 
 	return &MemoryStore{
 		workspace:  workspace,
 		memoryDir:  memoryDir,
 		memoryFile: memoryFile,
+		agentID:    agentID,
+		sharedDir:  sharedDir,
+		factsFile:  factsFile,
 	}
 }
 
@@ -147,5 +174,76 @@ func (ms *MemoryStore) GetMemoryContext() string {
 		sb.WriteString(recentNotes)
 	}
 
+	return sb.String()
+}
+
+func (ms *MemoryStore) GetAgentMemoryFile() string {
+	if ms.agentID == "" {
+		return ms.memoryFile
+	}
+	return filepath.Join(ms.memoryDir, "agents", ms.agentID+".md")
+}
+
+func (ms *MemoryStore) ReadAgentMemory() string {
+	agentFile := ms.GetAgentMemoryFile()
+	if data, err := os.ReadFile(agentFile); err == nil {
+		return string(data)
+	}
+	return ""
+}
+
+func (ms *MemoryStore) WriteAgentMemory(content string) error {
+	if ms.agentID == "" {
+		return ms.WriteLongTerm(content)
+	}
+	agentFile := ms.GetAgentMemoryFile()
+	agentDir := filepath.Dir(agentFile)
+	os.MkdirAll(agentDir, 0o755)
+	return os.WriteFile(agentFile, []byte(content), 0o644)
+}
+
+func (ms *MemoryStore) AppendAgentMemory(content string) error {
+	existing := ms.ReadAgentMemory()
+	var newContent string
+	if existing == "" {
+		newContent = content
+	} else {
+		newContent = existing + "\n" + content
+	}
+	return ms.WriteAgentMemory(newContent)
+}
+
+func (ms *MemoryStore) ReadSharedMemory(agentID string) string {
+	sharedFile := filepath.Join(ms.sharedDir, agentID+".md")
+	if data, err := os.ReadFile(sharedFile); err == nil {
+		return string(data)
+	}
+	return ""
+}
+
+func (ms *MemoryStore) WriteSharedMemory(agentID, content string) error {
+	sharedFile := filepath.Join(ms.sharedDir, agentID+".md")
+	return os.WriteFile(sharedFile, []byte(content), 0o644)
+}
+
+func (ms *MemoryStore) GetAllSharedMemory() string {
+	var sb strings.Builder
+	entries, err := os.ReadDir(ms.sharedDir)
+	if err != nil {
+		return ""
+	}
+	first := true
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+			data, err := os.ReadFile(filepath.Join(ms.sharedDir, e.Name()))
+			if err == nil {
+				if !first {
+					sb.WriteString("\n\n---\n\n")
+				}
+				sb.Write(data)
+				first = false
+			}
+		}
+	}
 	return sb.String()
 }

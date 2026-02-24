@@ -145,6 +145,10 @@ func registerSharedTools(
 		})
 		agent.Tools.Register(spawnTool)
 
+		// Agent discovery tool
+		discoveryTool := tools.NewAgentDiscoveryTool(registry.GetAgentInfoAdapter())
+		agent.Tools.Register(discoveryTool)
+
 		// Update context builder with the complete tools registry
 		agent.ContextBuilder.SetToolsRegistry(agent.Tools)
 	}

@@ -146,18 +146,24 @@ func (m AgentModelConfig) MarshalJSON() ([]byte, error) {
 }
 
 type AgentConfig struct {
-	ID        string            `json:"id"`
-	Default   bool              `json:"default,omitempty"`
-	Name      string            `json:"name,omitempty"`
-	Workspace string            `json:"workspace,omitempty"`
-	Model     *AgentModelConfig `json:"model,omitempty"`
-	Skills    []string          `json:"skills,omitempty"`
-	Subagents *SubagentsConfig  `json:"subagents,omitempty"`
+	ID             string            `json:"id"`
+	Default        bool              `json:"default,omitempty"`
+	Name           string            `json:"name,omitempty"`
+	Description    string            `json:"description,omitempty"`
+	Workspace      string            `json:"workspace,omitempty"`
+	Model          *AgentModelConfig `json:"model,omitempty"`
+	Skills         []string          `json:"skills,omitempty"`
+	SkillWhitelist bool              `json:"skill_whitelist,omitempty"`
+	Capabilities   []string          `json:"capabilities,omitempty"`
+	TeamLeader     bool              `json:"team_leader,omitempty"`
+	TeamMembers    []string          `json:"team_members,omitempty"`
+	Subagents      *SubagentsConfig  `json:"subagents,omitempty"`
 }
 
 type SubagentsConfig struct {
-	AllowAgents []string          `json:"allow_agents,omitempty"`
-	Model       *AgentModelConfig `json:"model,omitempty"`
+	AllowAgents     []string          `json:"allow_agents,omitempty"`
+	Model           *AgentModelConfig `json:"model,omitempty"`
+	RequireApproval bool              `json:"require_approval,omitempty"`
 }
 
 type PeerMatch struct {

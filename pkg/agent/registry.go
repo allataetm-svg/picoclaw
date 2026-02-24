@@ -1,12 +1,14 @@
 package agent
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/routing"
+	"github.com/sipeed/picoclaw/pkg/tools"
 )
 
 // AgentRegistry manages multiple agent instances and routes messages to them.
@@ -111,4 +113,92 @@ func (r *AgentRegistry) GetDefaultAgent() *AgentInstance {
 		return agent
 	}
 	return nil
+}
+
+// GetAllAgents returns all registered agent instances.
+func (r *AgentRegistry) GetAllAgents() []*AgentInstance {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	agents := make([]*AgentInstance, 0, len(r.agents))
+	for _, agent := range r.agents {
+		agents = append(agents, agent)
+	}
+	return agents
+}
+
+// FindAgentsByCapability returns agents that have the given capability.
+func (r *AgentRegistry) FindAgentsByCapability(capability string) []*AgentInstance {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	capability = strings.ToLower(capability)
+	var agents []*AgentInstance
+	for _, agent := range r.agents {
+		for _, cap := range agent.Capabilities {
+			if strings.ToLower(cap) == capability {
+				agents = append(agents, agent)
+				break
+			}
+		}
+	}
+	return agents
+}
+
+// FindAgentsByKeyword returns agents whose name, description, or capabilities match the keyword.
+func (r *AgentRegistry) FindAgentsByKeyword(keyword string) []*AgentInstance {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	keyword = strings.ToLower(keyword)
+	var agents []*AgentInstance
+	for _, agent := range r.agents {
+		if strings.Contains(strings.ToLower(agent.Name), keyword) ||
+			strings.Contains(strings.ToLower(agent.Description), keyword) {
+			agents = append(agents, agent)
+			continue
+		}
+		for _, cap := range agent.Capabilities {
+			if strings.Contains(strings.ToLower(cap), keyword) {
+				agents = append(agents, agent)
+				break
+			}
+		}
+	}
+	return agents
+}
+
+type AgentInfoAdapter struct {
+	registry *AgentRegistry
+}
+
+func (a *AgentInfoAdapter) toAgentInfo(agent *AgentInstance) *tools.AgentInfo {
+	return &tools.AgentInfo{
+		ID:           agent.ID,
+		Name:         agent.Name,
+		Description:  agent.Description,
+		Model:        agent.Model,
+		Capabilities: agent.Capabilities,
+		TeamLeader:   agent.TeamLeader,
+		TeamMembers:  agent.TeamMembers,
+	}
+}
+
+func (a *AgentInfoAdapter) FindAgentsByCapability(capability string) []*tools.AgentInfo {
+	agents := a.registry.FindAgentsByCapability(capability)
+	result := make([]*tools.AgentInfo, len(agents))
+	for i, agent := range agents {
+		result[i] = a.toAgentInfo(agent)
+	}
+	return result
+}
+
+func (a *AgentInfoAdapter) FindAgentsByKeyword(keyword string) []*tools.AgentInfo {
+	agents := a.registry.FindAgentsByKeyword(keyword)
+	result := make([]*tools.AgentInfo, len(agents))
+	for i, agent := range agents {
+		result[i] = a.toAgentInfo(agent)
+	}
+	return result
+}
+
+func (r *AgentRegistry) GetAgentInfoAdapter() tools.AgentRegistryInterface {
+	return &AgentInfoAdapter{registry: r}
 }
