@@ -168,14 +168,7 @@ func advancedSetup(cfg *config.Config) {
 		provider := providerList[pi]
 		models := providerModels[provider]
 
-		fmt.Printf("\nProvider: %s\n", provider)
-
-		var selectedModels []int
-		huh.NewMultiSelect[int]().
-			Title(fmt.Sprintf("Select models for %s (space to toggle, enter to confirm)", provider)).
-			Options(huhOptionsFromSlice(models)...).
-			Value(&selectedModels).
-			Run()
+		fmt.Printf("\nProvider: %s - adding all %d models\n", provider, len(models))
 
 		var apiKey string
 		huh.NewInput().
@@ -185,8 +178,7 @@ func advancedSetup(cfg *config.Config) {
 			Value(&apiKey).
 			Run()
 
-		for _, mi := range selectedModels {
-			modelName := models[mi]
+		for _, modelName := range models {
 			cfg.ModelList = append(cfg.ModelList, config.ModelConfig{
 				ModelName: modelName,
 				Model:     "opencode/" + modelName,
