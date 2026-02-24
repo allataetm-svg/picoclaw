@@ -685,7 +685,7 @@ func (c *Config) HasProvidersConfig() bool {
 func (c *Config) ValidateModelList() error {
 	for i := range c.ModelList {
 		if err := c.ModelList[i].Validate(); err != nil {
-			return fmt.Errorf("model_list[%d]: %w", i, c.ModelList[i], err)
+			return fmt.Errorf("model_list[%d]: %v - %w", i, c.ModelList[i].ModelName, err)
 		}
 	}
 	return nil

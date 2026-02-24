@@ -104,8 +104,8 @@ Your workspace is at: %s
 
 2. **Be helpful and accurate** - When using tools, briefly explain what you're doing.
 
-3. **Memory** - When interacting with me if something seems memorable, update %s/memory/MEMORY.md`,
-		identity, now, runtime, workspacePath, workspacePath, workspacePath, workspacePath, toolsSection, workspacePath)
+	3. **Memory** - When interacting with me if something seems memorable, update %s/memory/MEMORY.md`,
+		identity, now, runtime, workspacePath, workspacePath, workspacePath, workspacePath, workspacePath, toolsSection, workspacePath)
 }
 
 func (cb *ContextBuilder) buildToolsSection() string {
