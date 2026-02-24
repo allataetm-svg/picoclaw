@@ -61,10 +61,11 @@ type Config struct {
 }
 
 type ProviderGroupConfig struct {
-	APIKey  string   `json:"api_key,omitempty"`
-	APIBase string   `json:"api_base,omitempty"`
-	Proxy   string   `json:"proxy,omitempty"`
-	Models  []string `json:"models"`
+	APIKey     string   `json:"api_key,omitempty"`
+	APIBase    string   `json:"api_base,omitempty"`
+	Proxy      string   `json:"proxy,omitempty"`
+	AuthMethod string   `json:"auth_method,omitempty"`
+	Models     []string `json:"models"`
 }
 
 // MarshalJSON implements custom JSON marshaling for Config
@@ -688,11 +689,12 @@ func (c *Config) expandProviderGroups() {
 	for provider, group := range c.ProviderGroups {
 		for _, modelName := range group.Models {
 			c.ModelList = append(c.ModelList, ModelConfig{
-				ModelName: modelName,
-				Model:     provider + "/" + modelName,
-				APIKey:    group.APIKey,
-				APIBase:   group.APIBase,
-				Proxy:     group.Proxy,
+				ModelName:  modelName,
+				Model:      provider + "/" + modelName,
+				APIKey:     group.APIKey,
+				APIBase:    group.APIBase,
+				Proxy:      group.Proxy,
+				AuthMethod: group.AuthMethod,
 			})
 		}
 	}

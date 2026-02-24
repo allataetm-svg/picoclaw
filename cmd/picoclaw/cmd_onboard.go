@@ -164,6 +164,7 @@ func advancedSetup(cfg *config.Config) {
 				huh.NewOption("Moonshot", 8),
 				huh.NewOption("Groq", 9),
 				huh.NewOption("OpenCode", 10),
+				huh.NewOption("Antigravity (OAuth)", 11),
 			).
 			Value(&providerIdx).
 			Run()
@@ -176,18 +177,29 @@ func advancedSetup(cfg *config.Config) {
 		models := providerModels[provider]
 
 		fmt.Println()
-		var apiKey string
-		huh.NewInput().
-			Title(fmt.Sprintf("API key for %s (%d models)", provider, len(models))).
-			Placeholder("sk-...").
-			EchoMode(huh.EchoModePassword).
-			Value(&apiKey).
-			Run()
 
-		cfg.ProviderGroups[provider] = config.ProviderGroupConfig{
-			APIKey:  apiKey,
-			APIBase: "https://opencode.ai/zen",
-			Models:  models,
+		if provider == "antigravity" {
+			fmt.Printf("  Provider: %s (OAuth authentication)\n", provider)
+			fmt.Println("  You will need to run: picoclaw auth login antigravity")
+			fmt.Println("  After setup, configure OAuth in your account at antigravity.com")
+			cfg.ProviderGroups[provider] = config.ProviderGroupConfig{
+				AuthMethod: "oauth",
+				Models:     models,
+			}
+		} else {
+			var apiKey string
+			huh.NewInput().
+				Title(fmt.Sprintf("API key for %s (%d models)", provider, len(models))).
+				Placeholder("sk-...").
+				EchoMode(huh.EchoModePassword).
+				Value(&apiKey).
+				Run()
+
+			cfg.ProviderGroups[provider] = config.ProviderGroupConfig{
+				APIKey:  apiKey,
+				APIBase: "https://opencode.ai/zen",
+				Models:  models,
+			}
 		}
 
 		huh.NewConfirm().
@@ -422,6 +434,7 @@ var providerList = []string{
 	"moonshot",
 	"groq",
 	"opencode",
+	"antigravity",
 }
 
 var providerModels = map[string][]string{
@@ -463,6 +476,10 @@ var providerModels = map[string][]string{
 		"gpt-5.2", "gpt-5.1", "gpt-5", "gpt-5-nano",
 		"claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5",
 		"gemini-3-pro", "gemini-3-flash",
+	},
+	"antigravity": {
+		"gemini-3-flash", "gemini-3-pro", "gemini-2.0-flash",
+		"claude-opus-4-6-thinking", "claude-sonnet-4-6-thinking",
 	},
 }
 
