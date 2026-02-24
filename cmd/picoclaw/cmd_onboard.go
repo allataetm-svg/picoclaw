@@ -116,12 +116,13 @@ func quickstartSetup(cfg *config.Config) {
 		Value(&channelIdx).
 		Run()
 
-	cfg.ModelList = []config.ModelConfig{{
-		ModelName: model,
-		Model:     "opencode/" + model,
-		APIKey:    apiKey,
-		APIBase:   "https://opencode.ai/zen",
-	}}
+	cfg.ProviderGroups = map[string]config.ProviderGroupConfig{
+		"opencode": {
+			APIKey:  apiKey,
+			APIBase: "https://opencode.ai/zen",
+			Models:  []string{model},
+		},
+	}
 
 	cfg.Agents.Defaults.Model = model
 
@@ -162,7 +163,7 @@ func advancedSetup(cfg *config.Config) {
 		Value(&selectedProviders).
 		Run()
 
-	cfg.ModelList = []config.ModelConfig{}
+	cfg.ProviderGroups = map[string]config.ProviderGroupConfig{}
 
 	for _, pi := range selectedProviders {
 		provider := providerList[pi]
@@ -178,28 +179,25 @@ func advancedSetup(cfg *config.Config) {
 			Value(&apiKey).
 			Run()
 
-		for _, modelName := range models {
-			cfg.ModelList = append(cfg.ModelList, config.ModelConfig{
-				ModelName: modelName,
-				Model:     "opencode/" + modelName,
-				APIKey:    apiKey,
-				APIBase:   "https://opencode.ai/zen",
-			})
+		cfg.ProviderGroups[provider] = config.ProviderGroupConfig{
+			APIKey:  apiKey,
+			APIBase: "https://opencode.ai/zen",
+			Models:  models,
 		}
 	}
 
-	if len(cfg.ModelList) > 0 {
-		cfg.Agents.Defaults.Model = cfg.ModelList[0].ModelName
+	allModels := collectAllModels(cfg.ProviderGroups)
+	if len(allModels) > 0 {
+		cfg.Agents.Defaults.Model = allModels[0]
 
-		if len(cfg.ModelList) > 1 {
+		if len(allModels) > 1 {
 			var defaultIdx int
-			modelNames := modelsToNames(cfg.ModelList)
 			huh.NewSelect[int]().
 				Title("Select default model").
-				Options(huhOptionsFromSlice(modelNames)...).
+				Options(huhOptionsFromSlice(allModels)...).
 				Value(&defaultIdx).
 				Run()
-			cfg.Agents.Defaults.Model = cfg.ModelList[defaultIdx].ModelName
+			cfg.Agents.Defaults.Model = allModels[defaultIdx]
 
 			var useFallbacks bool
 			huh.NewConfirm().
@@ -213,12 +211,12 @@ func advancedSetup(cfg *config.Config) {
 				var fallbacks []int
 				huh.NewMultiSelect[int]().
 					Title("Select fallback models (space to toggle, enter to confirm)").
-					Options(huhOptionsFromSlice(modelNames)...).
+					Options(huhOptionsFromSlice(allModels)...).
 					Value(&fallbacks).
 					Run()
 				for _, fi := range fallbacks {
 					if fi != defaultIdx {
-						cfg.Agents.Defaults.ModelFallbacks = append(cfg.Agents.Defaults.ModelFallbacks, cfg.ModelList[fi].ModelName)
+						cfg.Agents.Defaults.ModelFallbacks = append(cfg.Agents.Defaults.ModelFallbacks, allModels[fi])
 					}
 				}
 			}
@@ -502,6 +500,14 @@ func createWorkspaceTemplates(workspace string) {
 	if err != nil {
 		fmt.Printf("Error copying workspace templates: %v\n", err)
 	}
+}
+
+func collectAllModels(groups map[string]config.ProviderGroupConfig) []string {
+	var all []string
+	for _, g := range groups {
+		all = append(all, g.Models...)
+	}
+	return all
 }
 
 func copyEmbeddedToTarget(targetDir string) error {

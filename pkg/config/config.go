@@ -47,16 +47,24 @@ func (f *FlexibleStringSlice) UnmarshalJSON(data []byte) error {
 }
 
 type Config struct {
-	Agents    AgentsConfig    `json:"agents"`
-	Bindings  []AgentBinding  `json:"bindings,omitempty"`
-	Session   SessionConfig   `json:"session,omitempty"`
-	Channels  ChannelsConfig  `json:"channels"`
-	Providers ProvidersConfig `json:"providers,omitempty"`
-	ModelList []ModelConfig   `json:"model_list"` // New model-centric provider configuration
-	Gateway   GatewayConfig   `json:"gateway"`
-	Tools     ToolsConfig     `json:"tools"`
-	Heartbeat HeartbeatConfig `json:"heartbeat"`
-	Devices   DevicesConfig   `json:"devices"`
+	Agents         AgentsConfig                   `json:"agents"`
+	Bindings       []AgentBinding                 `json:"bindings,omitempty"`
+	Session        SessionConfig                  `json:"session,omitempty"`
+	Channels       ChannelsConfig                 `json:"channels"`
+	Providers      ProvidersConfig                `json:"providers,omitempty"`
+	ModelList      []ModelConfig                  `json:"model_list"`
+	ProviderGroups map[string]ProviderGroupConfig `json:"provider_groups,omitempty"`
+	Gateway        GatewayConfig                  `json:"gateway"`
+	Tools          ToolsConfig                    `json:"tools"`
+	Heartbeat      HeartbeatConfig                `json:"heartbeat"`
+	Devices        DevicesConfig                  `json:"devices"`
+}
+
+type ProviderGroupConfig struct {
+	APIKey  string   `json:"api_key,omitempty"`
+	APIBase string   `json:"api_base,omitempty"`
+	Proxy   string   `json:"proxy,omitempty"`
+	Models  []string `json:"models"`
 }
 
 // MarshalJSON implements custom JSON marshaling for Config
@@ -510,6 +518,11 @@ func LoadConfig(path string) (*Config, error) {
 		cfg.ModelList = ConvertProvidersToModelList(cfg)
 	}
 
+	// Expand provider_groups into model_list
+	if len(cfg.ProviderGroups) > 0 {
+		cfg.expandProviderGroups()
+	}
+
 	// Validate model_list for uniqueness and required fields
 	if err := cfg.ValidateModelList(); err != nil {
 		return nil, err
@@ -653,8 +666,22 @@ func (c *Config) HasProvidersConfig() bool {
 func (c *Config) ValidateModelList() error {
 	for i := range c.ModelList {
 		if err := c.ModelList[i].Validate(); err != nil {
-			return fmt.Errorf("model_list[%d]: %w", i, err)
+			return fmt.Errorf("model_list[%d]: %w", i, c.ModelList[i], err)
 		}
 	}
 	return nil
+}
+
+func (c *Config) expandProviderGroups() {
+	for provider, group := range c.ProviderGroups {
+		for _, modelName := range group.Models {
+			c.ModelList = append(c.ModelList, ModelConfig{
+				ModelName: modelName,
+				Model:     provider + "/" + modelName,
+				APIKey:    group.APIKey,
+				APIBase:   group.APIBase,
+				Proxy:     group.Proxy,
+			})
+		}
+	}
 }
