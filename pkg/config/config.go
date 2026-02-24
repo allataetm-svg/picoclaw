@@ -520,6 +520,12 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
+	// Fix #680/#721: Reset ModelList to nil before unmarshaling to prevent
+	// preset values from DefaultConfig leaking into user config via JSON decoder
+	// slice reuse. Go's JSON decoder reuses existing slice elements when
+	// unmarshaling into a non-nil slice.
+	cfg.ModelList = nil
+
 	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}

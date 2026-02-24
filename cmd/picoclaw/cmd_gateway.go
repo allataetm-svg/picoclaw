@@ -29,14 +29,29 @@ import (
 )
 
 func gatewayCmd() {
-	// Check for --debug flag
+	// Check for --debug flag and subcommands
 	args := os.Args[2:]
+
+	var debug bool
+	var subcommand string
 	for _, arg := range args {
 		if arg == "--debug" || arg == "-d" {
+			debug = true
 			logger.SetLevel(logger.DEBUG)
 			fmt.Println("🔍 Debug mode enabled")
-			break
+		} else if arg == "status" || arg == "--status" || arg == "-s" {
+			subcommand = "status"
 		}
+	}
+
+	// Fix #671: gateway status should not start the gateway
+	if subcommand == "status" {
+		showGatewayStatus()
+		return
+	}
+
+	if debug {
+		fmt.Println("🔍 Debug mode enabled")
 	}
 
 	cfg, err := loadConfig()
@@ -245,4 +260,78 @@ func setupCronTool(
 	})
 
 	return cronService
+}
+
+// showGatewayStatus shows gateway status without starting the gateway
+// Fix for issue #671: gateway status should not launch an extra worker
+func showGatewayStatus() {
+	cfg, err := loadConfig()
+	if err != nil {
+		fmt.Printf("Error loading config: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("📦 PicoClaw Gateway Status")
+	fmt.Println("==============================")
+	fmt.Printf("Config: %s\n", getConfigPath())
+	fmt.Printf("Workspace: %s\n", cfg.WorkspacePath())
+	fmt.Printf("Model: %s\n", cfg.Agents.Defaults.Model)
+	fmt.Printf("Max Tokens: %d\n", cfg.Agents.Defaults.MaxTokens)
+	fmt.Printf("Temperature: %v\n", cfg.Agents.Defaults.Temperature)
+	fmt.Printf("Max Tool Iterations: %d\n", cfg.Agents.Defaults.MaxToolIterations)
+
+	fmt.Println("\n📡 Channels:")
+	channels := []string{}
+	if cfg.Channels.Telegram.Enabled {
+		channels = append(channels, "Telegram")
+	}
+	if cfg.Channels.Discord.Enabled {
+		channels = append(channels, "Discord")
+	}
+	if cfg.Channels.WhatsApp.Enabled {
+		channels = append(channels, "WhatsApp")
+	}
+	if cfg.Channels.Slack.Enabled {
+		channels = append(channels, "Slack")
+	}
+	if cfg.Channels.Feishu.Enabled {
+		channels = append(channels, "Feishu")
+	}
+	if cfg.Channels.DingTalk.Enabled {
+		channels = append(channels, "DingTalk")
+	}
+	if cfg.Channels.QQ.Enabled {
+		channels = append(channels, "QQ")
+	}
+	if cfg.Channels.OneBot.Enabled {
+		channels = append(channels, "OneBot")
+	}
+	if cfg.Channels.WeCom.Enabled {
+		channels = append(channels, "WeCom")
+	}
+	if cfg.Channels.MaixCam.Enabled {
+		channels = append(channels, "MaixCam")
+	}
+
+	if len(channels) == 0 {
+		fmt.Println("  (no channels enabled)")
+	} else {
+		for _, ch := range channels {
+			fmt.Printf("  • %s\n", ch)
+		}
+	}
+
+	fmt.Println("\n🛠️ Tools:")
+	fmt.Printf("  Web Search: %v\n", cfg.Tools.Web.DuckDuckGo.Enabled)
+	fmt.Printf("  Cron: enabled\n")
+	fmt.Printf("  Exec: enabled\n")
+	fmt.Printf("  Skills: enabled\n")
+
+	fmt.Println("\n❤️ Heartbeat:")
+	fmt.Printf("  Enabled: %v\n", cfg.Heartbeat.Enabled)
+	if cfg.Heartbeat.Enabled {
+		fmt.Printf("  Interval: %d minutes\n", cfg.Heartbeat.Interval)
+	}
+
+	fmt.Println("\n✅ Run 'picoclaw gateway' to start the gateway")
 }

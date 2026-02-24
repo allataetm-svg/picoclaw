@@ -553,10 +553,26 @@ func (al *AgentLoop) runLLMIteration(
 			}
 
 			errMsg := strings.ToLower(err.Error())
-			isContextError := strings.Contains(errMsg, "token") ||
-				strings.Contains(errMsg, "context") ||
-				strings.Contains(errMsg, "invalidparameter") ||
-				strings.Contains(errMsg, "length")
+			// Fix #683: Use more specific patterns to avoid misclassifying
+			// network timeouts as context window errors
+			isContextError := strings.Contains(errMsg, "context_length_exceeded") ||
+				strings.Contains(errMsg, "context_window_exceeded") ||
+				strings.Contains(errMsg, "max_tokens_exceeded") ||
+				strings.Contains(errMsg, "token_limit_exceeded") ||
+				strings.Contains(errMsg, "maximum_context_length") ||
+				(strings.Contains(errMsg, "invalidparameter") && strings.Contains(errMsg, "token")) ||
+				(strings.Contains(errMsg, "length") && strings.Contains(errMsg, "exceed"))
+
+			// Check for network errors - these should not trigger context compression
+			isNetworkError := strings.Contains(errMsg, "timeout") ||
+				strings.Contains(errMsg, "connection refused") ||
+				strings.Contains(errMsg, "no route to host") ||
+				strings.Contains(errMsg, "network is unreachable") ||
+				strings.Contains(errMsg, "i/o timeout") ||
+				strings.Contains(errMsg, "context deadline")
+
+			// Only treat as context error if it's NOT a network error
+			isContextError = isContextError && !isNetworkError
 
 			if isContextError && retry < maxRetries {
 				logger.WarnCF("agent", "Context window error detected, attempting compression", map[string]any{
