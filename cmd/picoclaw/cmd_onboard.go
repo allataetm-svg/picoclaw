@@ -264,6 +264,107 @@ func advancedSetup(cfg *config.Config) {
 		}
 	}
 
+	fmt.Println("\n=== Agents ===")
+	var createAgents bool
+	huh.NewConfirm().
+		Title("Create multiple agents?").
+		Description("You can create specialized agents with different capabilities").
+		Affirmative("Yes, create agents").
+		Negative("No, use default").
+		Value(&createAgents).
+		Run()
+
+	if createAgents {
+		cfg.Agents.List = []config.AgentConfig{}
+
+		var addMoreAgents bool
+		for {
+			var agentID, agentName, agentDesc string
+
+			fmt.Println("\n--- New Agent ---")
+
+			huh.NewInput().
+				Title("Agent ID").
+				Placeholder("unique-id (e.g., coder)").
+				Value(&agentID).
+				Run()
+
+			huh.NewInput().
+				Title("Agent Name").
+				Placeholder("Coder Agent").
+				Value(&agentName).
+				Run()
+
+			huh.NewInput().
+				Title("Description").
+				Placeholder("Expert code reviewer").
+				Value(&agentDesc).
+				Run()
+
+			var capabilities []int
+			huh.NewMultiSelect[int]().
+				Title("Select capabilities (space to toggle, enter to confirm)").
+				Options(
+					huh.NewOption("Coding", 0),
+					huh.NewOption("Writing", 1),
+					huh.NewOption("Research", 2),
+					huh.NewOption("Math", 3),
+					huh.NewOption("Analysis", 4),
+					huh.NewOption("Creative", 5),
+				).
+				Value(&capabilities).
+				Run()
+
+			var teamLeader bool
+			huh.NewConfirm().
+				Title("Make this agent a team leader?").
+				Affirmative("Yes").
+				Negative("No").
+				Value(&teamLeader).
+				Run()
+
+			capabilityList := []string{"coding", "writing", "research", "math", "analysis", "creative"}
+			var caps []string
+			for _, c := range capabilities {
+				caps = append(caps, capabilityList[c])
+			}
+
+			agentConfig := config.AgentConfig{
+				ID:           agentID,
+				Name:         agentName,
+				Description:  agentDesc,
+				Capabilities: caps,
+				TeamLeader:   teamLeader,
+			}
+			cfg.Agents.List = append(cfg.Agents.List, agentConfig)
+
+			huh.NewConfirm().
+				Title("Add another agent?").
+				Affirmative("Yes").
+				Negative("No, done").
+				Value(&addMoreAgents).
+				Run()
+
+			if !addMoreAgents {
+				break
+			}
+		}
+
+		if len(cfg.Agents.List) > 0 {
+			var defaultAgentIdx int
+			agentNames := make([]string, len(cfg.Agents.List))
+			for i, a := range cfg.Agents.List {
+				agentNames[i] = a.Name
+			}
+			huh.NewSelect[int]().
+				Title("Select default agent").
+				Options(huhOptionsFromSlice(agentNames)...).
+				Value(&defaultAgentIdx).
+				Run()
+			cfg.Agents.List[defaultAgentIdx].Default = true
+		}
+	}
+
 	fmt.Println("\n=== Channels ===")
 
 	var selectedChannels []int
