@@ -144,36 +144,41 @@ func advancedSetup(cfg *config.Config) {
 
 	fmt.Println("\n=== Providers & Models ===")
 
-	var selectedProviders []int
-	huh.NewMultiSelect[int]().
-		Title("Select providers (space to toggle, enter to confirm)").
-		Options(
-			huh.NewOption("OpenAI", 0),
-			huh.NewOption("Anthropic", 1),
-			huh.NewOption("Google", 2),
-			huh.NewOption("DeepSeek", 3),
-			huh.NewOption("OpenRouter", 4),
-			huh.NewOption("Ollama", 5),
-			huh.NewOption("Zhipu", 6),
-			huh.NewOption("Qwen", 7),
-			huh.NewOption("Moonshot", 8),
-			huh.NewOption("Groq", 9),
-			huh.NewOption("OpenCode", 10),
-		).
-		Value(&selectedProviders).
-		Run()
-
 	cfg.ProviderGroups = map[string]config.ProviderGroupConfig{}
 
-	for _, pi := range selectedProviders {
-		provider := providerList[pi]
+	var addMore bool
+	for {
+		var providerIdx int
+		huh.NewSelect[int]().
+			Title("Select provider to add (or Done to finish)").
+			Options(
+				huh.NewOption("Done adding providers", 99),
+				huh.NewOption("OpenAI", 0),
+				huh.NewOption("Anthropic", 1),
+				huh.NewOption("Google", 2),
+				huh.NewOption("DeepSeek", 3),
+				huh.NewOption("OpenRouter", 4),
+				huh.NewOption("Ollama", 5),
+				huh.NewOption("Zhipu", 6),
+				huh.NewOption("Qwen", 7),
+				huh.NewOption("Moonshot", 8),
+				huh.NewOption("Groq", 9),
+				huh.NewOption("OpenCode", 10),
+			).
+			Value(&providerIdx).
+			Run()
+
+		if providerIdx == 99 {
+			break
+		}
+
+		provider := providerList[providerIdx]
 		models := providerModels[provider]
 
-		fmt.Printf("\nProvider: %s - adding all %d models\n", provider, len(models))
-
+		fmt.Println()
 		var apiKey string
 		huh.NewInput().
-			Title(fmt.Sprintf("API key for %s", provider)).
+			Title(fmt.Sprintf("API key for %s (%d models)", provider, len(models))).
 			Placeholder("sk-...").
 			EchoMode(huh.EchoModePassword).
 			Value(&apiKey).
@@ -183,6 +188,17 @@ func advancedSetup(cfg *config.Config) {
 			APIKey:  apiKey,
 			APIBase: "https://opencode.ai/zen",
 			Models:  models,
+		}
+
+		huh.NewConfirm().
+			Title("Add another provider?").
+			Affirmative("Yes").
+			Negative("No, done").
+			Value(&addMore).
+			Run()
+
+		if !addMore {
+			break
 		}
 	}
 
