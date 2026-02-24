@@ -90,6 +90,7 @@ func quickstartSetup(cfg *config.Config) {
 			huh.NewOption("Moonshot", 8),
 			huh.NewOption("Groq", 9),
 			huh.NewOption("OpenCode", 10),
+			huh.NewOption("Antigravity (OAuth)", 11),
 		).
 		Value(&providerIdx).
 		Run()
@@ -97,12 +98,16 @@ func quickstartSetup(cfg *config.Config) {
 	provider := providerList[providerIdx]
 
 	var apiKey string
-	huh.NewInput().
-		Title(fmt.Sprintf("Enter API key for %s", provider)).
-		Placeholder("sk-...").
-		EchoMode(huh.EchoModePassword).
-		Value(&apiKey).
-		Run()
+	if provider == "antigravity" {
+		fmt.Println("  Run 'picoclaw auth login --provider antigravity' after setup")
+	} else {
+		huh.NewInput().
+			Title(fmt.Sprintf("Enter API key for %s", provider)).
+			Placeholder("sk-...").
+			EchoMode(huh.EchoModePassword).
+			Value(&apiKey).
+			Run()
+	}
 
 	model := promptSelectModel(provider)
 
@@ -116,12 +121,21 @@ func quickstartSetup(cfg *config.Config) {
 		Value(&channelIdx).
 		Run()
 
-	cfg.ProviderGroups = map[string]config.ProviderGroupConfig{
-		provider: {
-			APIKey:  apiKey,
-			APIBase: "https://opencode.ai/zen",
-			Models:  []string{model},
-		},
+	if provider == "antigravity" {
+		cfg.ProviderGroups = map[string]config.ProviderGroupConfig{
+			provider: {
+				AuthMethod: "oauth",
+				Models:     []string{model},
+			},
+		}
+	} else {
+		cfg.ProviderGroups = map[string]config.ProviderGroupConfig{
+			provider: {
+				APIKey:  apiKey,
+				APIBase: "https://opencode.ai/zen",
+				Models:  []string{model},
+			},
+		}
 	}
 
 	cfg.Agents.Defaults.Model = model
@@ -180,6 +194,7 @@ func advancedSetup(cfg *config.Config) {
 
 		if provider == "antigravity" {
 			fmt.Println("  Provider: Antigravity (OAuth)")
+			fmt.Println("  Run 'picoclaw auth login --provider antigravity' after setup")
 			cfg.ProviderGroups[provider] = config.ProviderGroupConfig{
 				AuthMethod: "oauth",
 				Models:     models,
