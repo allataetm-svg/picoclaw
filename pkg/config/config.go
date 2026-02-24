@@ -68,12 +68,13 @@ type ProviderGroupConfig struct {
 }
 
 // MarshalJSON implements custom JSON marshaling for Config
-// to omit providers section when empty and session when empty
+// to omit providers section when empty, session when empty, and model_list when provider_groups exists
 func (c Config) MarshalJSON() ([]byte, error) {
 	type Alias Config
 	aux := &struct {
 		Providers *ProvidersConfig `json:"providers,omitempty"`
 		Session   *SessionConfig   `json:"session,omitempty"`
+		ModelList []ModelConfig    `json:"model_list,omitempty"`
 		*Alias
 	}{
 		Alias: (*Alias)(&c),
@@ -87,6 +88,13 @@ func (c Config) MarshalJSON() ([]byte, error) {
 	// Only include session if not empty
 	if c.Session.DMScope != "" || len(c.Session.IdentityLinks) > 0 {
 		aux.Session = &c.Session
+	}
+
+	// Only include model_list if provider_groups is empty (model_list is auto-expanded from provider_groups)
+	if len(c.ProviderGroups) > 0 {
+		aux.ModelList = nil
+	} else if len(c.ModelList) == 0 {
+		aux.ModelList = nil
 	}
 
 	return json.Marshal(aux)
@@ -532,6 +540,10 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 func SaveConfig(path string, cfg *Config) error {
+	if len(cfg.ProviderGroups) > 0 {
+		cfg.ModelList = nil
+	}
+
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
