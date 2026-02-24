@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/huh"
 	"github.com/sipeed/picoclaw/pkg/config"
 )
 
@@ -23,28 +24,34 @@ func onboard() {
 	configPath := getConfigPath()
 
 	if _, err := os.Stat(configPath); err == nil {
-		fmt.Printf("Config already exists at %s\n", configPath)
-		fmt.Print("Overwrite? (y/n): ")
-		var response string
-		fmt.Scanln(&response)
-		if response != "y" {
+		var overwrite bool
+		huh.NewConfirm().
+			Title("Config already exists").
+			Description(fmt.Sprintf("Overwrite existing config at %s?", configPath)).
+			Affirmative("Yes, overwrite").
+			Negative("No, cancel").
+			Value(&overwrite).
+			Run()
+
+		if !overwrite {
 			fmt.Println("Aborted.")
 			return
 		}
 	}
 
-	fmt.Println("\n=== PicoClaw Setup ===")
-	fmt.Println("")
-	fmt.Println("Choose setup mode:")
-	fmt.Println("  1) Quickstart   - One provider + one channel")
-	fmt.Println("  2) Advanced      - Multiple providers, models, channels")
-	fmt.Println("")
-
-	choice := promptChoice([]string{"Quickstart", "Advanced"})
-
 	cfg := config.DefaultConfig()
 
-	if choice == 0 {
+	var setupMode int
+	huh.NewSelect[int]().
+		Title("PicoClaw Setup").
+		Options(
+			huh.NewOption("Quickstart - One provider + one channel", 0),
+			huh.NewOption("Advanced - Multiple providers, models, channels", 1),
+		).
+		Value(&setupMode).
+		Run()
+
+	if setupMode == 0 {
 		quickstartSetup(cfg)
 	} else {
 		advancedSetup(cfg)
@@ -58,8 +65,8 @@ func onboard() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("\nConfig saved to %s\n", configPath)
-	fmt.Printf("\n%s picoclaw is ready!\n", logo)
+	fmt.Printf("\n✅ Config saved to %s\n", configPath)
+	fmt.Printf("%s picoclaw is ready!\n", logo)
 	fmt.Println("\nNext steps:")
 	fmt.Println("  1. Chat: picoclaw agent -m \"Hello!\"")
 	fmt.Println("  2. Or run: picoclaw agent (interactive mode)")
@@ -67,16 +74,47 @@ func onboard() {
 
 func quickstartSetup(cfg *config.Config) {
 	fmt.Println("\n--- Quickstart Setup ---")
-	fmt.Println("")
 
-	providerIdx := promptChoice(providerList)
+	var providerIdx int
+	huh.NewSelect[int]().
+		Title("Select Provider").
+		Options(
+			huh.NewOption("OpenAI", 0),
+			huh.NewOption("Anthropic", 1),
+			huh.NewOption("Google", 2),
+			huh.NewOption("DeepSeek", 3),
+			huh.NewOption("OpenRouter", 4),
+			huh.NewOption("Ollama", 5),
+			huh.NewOption("Zhipu", 6),
+			huh.NewOption("Qwen", 7),
+			huh.NewOption("Moonshot", 8),
+			huh.NewOption("Groq", 9),
+			huh.NewOption("OpenCode", 10),
+		).
+		Value(&providerIdx).
+		Run()
+
 	provider := providerList[providerIdx]
 
-	apiKey := readLine("Enter API key: ")
+	var apiKey string
+	huh.NewInput().
+		Title(fmt.Sprintf("Enter API key for %s", provider)).
+		Placeholder("sk-...").
+		EchoMode(huh.EchoModePassword).
+		Value(&apiKey).
+		Run()
 
-	model := promptSelect("Select model:", provider)
+	model := promptSelectModel(provider)
 
-	channel := promptChoice(channelList[:2])
+	var channelIdx int
+	huh.NewSelect[int]().
+		Title("Select Channel").
+		Options(
+			huh.NewOption("CLI (terminal only)", 0),
+			huh.NewOption("Telegram", 1),
+		).
+		Value(&channelIdx).
+		Run()
 
 	cfg.ModelList = []config.ModelConfig{{
 		ModelName: model,
@@ -87,21 +125,42 @@ func quickstartSetup(cfg *config.Config) {
 
 	cfg.Agents.Defaults.Model = model
 
-	if channel == 1 {
+	if channelIdx == 1 {
 		cfg.Channels.Telegram.Enabled = true
-		cfg.Channels.Telegram.Token = readLine("Enter Telegram bot token: ")
+		var token string
+		huh.NewInput().
+			Title("Enter Telegram bot token").
+			Placeholder("123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11").
+			Value(&token).
+			Run()
+		cfg.Channels.Telegram.Token = token
 		cfg.Channels.Telegram.AllowFrom = config.FlexibleStringSlice{}
 	}
 }
 
 func advancedSetup(cfg *config.Config) {
 	fmt.Println("\n--- Advanced Setup ---")
-	fmt.Println("")
 
-	fmt.Println("=== Providers & Models ===")
-	fmt.Println("Select providers (space to toggle, enter to confirm):")
+	fmt.Println("\n=== Providers & Models ===")
 
-	selectedProviders := promptMultiSelect(providerList)
+	var selectedProviders []int
+	huh.NewMultiSelect[int]().
+		Title("Select providers (space to toggle, enter to confirm)").
+		Options(
+			huh.NewOption("OpenAI", 0),
+			huh.NewOption("Anthropic", 1),
+			huh.NewOption("Google", 2),
+			huh.NewOption("DeepSeek", 3),
+			huh.NewOption("OpenRouter", 4),
+			huh.NewOption("Ollama", 5),
+			huh.NewOption("Zhipu", 6),
+			huh.NewOption("Qwen", 7),
+			huh.NewOption("Moonshot", 8),
+			huh.NewOption("Groq", 9),
+			huh.NewOption("OpenCode", 10),
+		).
+		Value(&selectedProviders).
+		Run()
 
 	cfg.ModelList = []config.ModelConfig{}
 
@@ -110,9 +169,21 @@ func advancedSetup(cfg *config.Config) {
 		models := providerModels[provider]
 
 		fmt.Printf("\nProvider: %s\n", provider)
-		selectedModels := promptMultiSelect(models)
 
-		apiKey := readLine(fmt.Sprintf("API key for %s: ", provider))
+		var selectedModels []int
+		huh.NewMultiSelect[int]().
+			Title(fmt.Sprintf("Select models for %s (space to toggle, enter to confirm)", provider)).
+			Options(huhOptionsFromSlice(models)...).
+			Value(&selectedModels).
+			Run()
+
+		var apiKey string
+		huh.NewInput().
+			Title(fmt.Sprintf("API key for %s", provider)).
+			Placeholder("sk-...").
+			EchoMode(huh.EchoModePassword).
+			Value(&apiKey).
+			Run()
 
 		for _, mi := range selectedModels {
 			modelName := models[mi]
@@ -129,13 +200,30 @@ func advancedSetup(cfg *config.Config) {
 		cfg.Agents.Defaults.Model = cfg.ModelList[0].ModelName
 
 		if len(cfg.ModelList) > 1 {
-			fmt.Println("\nSelect default model:")
-			defaultIdx := promptSelectIndex("Default model:", modelsToNames(cfg.ModelList))
+			var defaultIdx int
+			modelNames := modelsToNames(cfg.ModelList)
+			huh.NewSelect[int]().
+				Title("Select default model").
+				Options(huhOptionsFromSlice(modelNames)...).
+				Value(&defaultIdx).
+				Run()
 			cfg.Agents.Defaults.Model = cfg.ModelList[defaultIdx].ModelName
 
-			if promptYesNo("Add model fallbacks?") {
-				fmt.Println("Select fallback models (space to toggle, enter to confirm):")
-				fallbacks := promptMultiSelectIndex(modelsToNames(cfg.ModelList))
+			var useFallbacks bool
+			huh.NewConfirm().
+				Title("Add model fallbacks?").
+				Affirmative("Yes").
+				Negative("No").
+				Value(&useFallbacks).
+				Run()
+
+			if useFallbacks {
+				var fallbacks []int
+				huh.NewMultiSelect[int]().
+					Title("Select fallback models (space to toggle, enter to confirm)").
+					Options(huhOptionsFromSlice(modelNames)...).
+					Value(&fallbacks).
+					Run()
 				for _, fi := range fallbacks {
 					if fi != defaultIdx {
 						cfg.Agents.Defaults.ModelFallbacks = append(cfg.Agents.Defaults.ModelFallbacks, cfg.ModelList[fi].ModelName)
@@ -146,8 +234,25 @@ func advancedSetup(cfg *config.Config) {
 	}
 
 	fmt.Println("\n=== Channels ===")
-	fmt.Println("Select channels (space to toggle, enter to confirm):")
-	selectedChannels := promptMultiSelect(channelList)
+
+	var selectedChannels []int
+	huh.NewMultiSelect[int]().
+		Title("Select channels (space to toggle, enter to confirm)").
+		Options(
+			huh.NewOption("CLI (terminal)", 0),
+			huh.NewOption("Telegram", 1),
+			huh.NewOption("Discord", 2),
+			huh.NewOption("WhatsApp", 3),
+			huh.NewOption("Slack", 4),
+			huh.NewOption("Feishu (飞书)", 5),
+			huh.NewOption("DingTalk (钉钉)", 6),
+			huh.NewOption("QQ", 7),
+			huh.NewOption("OneBot", 8),
+			huh.NewOption("WeCom (企业微信)", 9),
+			huh.NewOption("MaixCam", 10),
+		).
+		Value(&selectedChannels).
+		Run()
 
 	for _, ci := range selectedChannels {
 		switch ci {
@@ -155,61 +260,148 @@ func advancedSetup(cfg *config.Config) {
 			fmt.Println("  CLI is always available")
 		case 1:
 			cfg.Channels.Telegram.Enabled = true
-			cfg.Channels.Telegram.Token = readLine("  Telegram bot token: ")
+			var token string
+			huh.NewInput().
+				Title("Telegram bot token").
+				Placeholder("123456:ABC-DEF...").
+				Value(&token).
+				Run()
+			cfg.Channels.Telegram.Token = token
 			cfg.Channels.Telegram.AllowFrom = config.FlexibleStringSlice{}
 		case 2:
 			cfg.Channels.Discord.Enabled = true
-			cfg.Channels.Discord.Token = readLine("  Discord bot token: ")
+			var token string
+			huh.NewInput().
+				Title("Discord bot token").
+				Placeholder("MTk...").
+				Value(&token).
+				Run()
+			cfg.Channels.Discord.Token = token
 			cfg.Channels.Discord.AllowFrom = config.FlexibleStringSlice{}
 		case 3:
 			cfg.Channels.WhatsApp.Enabled = true
-			cfg.Channels.WhatsApp.BridgeURL = readLine("  WhatsApp bridge URL (default: ws://localhost:3001): ")
-			if cfg.Channels.WhatsApp.BridgeURL == "" {
-				cfg.Channels.WhatsApp.BridgeURL = "ws://localhost:3001"
+			var url string
+			huh.NewInput().
+				Title("WhatsApp bridge URL").
+				Placeholder("ws://localhost:3001").
+				Value(&url).
+				Run()
+			if url == "" {
+				url = "ws://localhost:3001"
 			}
+			cfg.Channels.WhatsApp.BridgeURL = url
 			cfg.Channels.WhatsApp.AllowFrom = config.FlexibleStringSlice{}
 		case 4:
 			cfg.Channels.Slack.Enabled = true
-			cfg.Channels.Slack.BotToken = readLine("  Slack bot token (xoxb-...): ")
-			cfg.Channels.Slack.AppToken = readLine("  Slack app token (xapp-...): ")
+			var botToken, appToken string
+			huh.NewInput().
+				Title("Slack bot token (xoxb-...)").
+				Value(&botToken).
+				Run()
+			huh.NewInput().
+				Title("Slack app token (xapp-...)").
+				Value(&appToken).
+				Run()
+			cfg.Channels.Slack.BotToken = botToken
+			cfg.Channels.Slack.AppToken = appToken
 			cfg.Channels.Slack.AllowFrom = config.FlexibleStringSlice{}
 		case 5:
 			cfg.Channels.Feishu.Enabled = true
-			cfg.Channels.Feishu.AppID = readLine("  Feishu app ID: ")
-			cfg.Channels.Feishu.AppSecret = readLine("  Feishu app secret: ")
+			var appID, appSecret string
+			huh.NewInput().
+				Title("Feishu app ID").
+				Value(&appID).
+				Run()
+			huh.NewInput().
+				Title("Feishu app secret").
+				Value(&appSecret).
+				Run()
+			cfg.Channels.Feishu.AppID = appID
+			cfg.Channels.Feishu.AppSecret = appSecret
 			cfg.Channels.Feishu.AllowFrom = config.FlexibleStringSlice{}
 		case 6:
 			cfg.Channels.DingTalk.Enabled = true
-			cfg.Channels.DingTalk.ClientID = readLine("  DingTalk client ID: ")
-			cfg.Channels.DingTalk.ClientSecret = readLine("  DingTalk client secret: ")
+			var clientID, clientSecret string
+			huh.NewInput().
+				Title("DingTalk client ID").
+				Value(&clientID).
+				Run()
+			huh.NewInput().
+				Title("DingTalk client secret").
+				Value(&clientSecret).
+				Run()
+			cfg.Channels.DingTalk.ClientID = clientID
+			cfg.Channels.DingTalk.ClientSecret = clientSecret
 			cfg.Channels.DingTalk.AllowFrom = config.FlexibleStringSlice{}
 		case 7:
 			cfg.Channels.QQ.Enabled = true
-			cfg.Channels.QQ.AppID = readLine("  QQ app ID: ")
-			cfg.Channels.QQ.AppSecret = readLine("  QQ app secret: ")
+			var appID, appSecret string
+			huh.NewInput().
+				Title("QQ app ID").
+				Value(&appID).
+				Run()
+			huh.NewInput().
+				Title("QQ app secret").
+				Value(&appSecret).
+				Run()
+			cfg.Channels.QQ.AppID = appID
+			cfg.Channels.QQ.AppSecret = appSecret
 			cfg.Channels.QQ.AllowFrom = config.FlexibleStringSlice{}
 		case 8:
 			cfg.Channels.OneBot.Enabled = true
-			cfg.Channels.OneBot.WSUrl = readLine("  OneBot WebSocket URL (default: ws://127.0.0.1:3001): ")
-			if cfg.Channels.OneBot.WSUrl == "" {
-				cfg.Channels.OneBot.WSUrl = "ws://127.0.0.1:3001"
+			var wsUrl, accessToken string
+			huh.NewInput().
+				Title("OneBot WebSocket URL").
+				Placeholder("ws://127.0.0.1:3001").
+				Value(&wsUrl).
+				Run()
+			if wsUrl == "" {
+				wsUrl = "ws://127.0.0.1:3001"
 			}
-			cfg.Channels.OneBot.AccessToken = readLine("  OneBot access token (optional): ")
+			huh.NewInput().
+				Title("OneBot access token (optional)").
+				Value(&accessToken).
+				Run()
+			cfg.Channels.OneBot.WSUrl = wsUrl
+			cfg.Channels.OneBot.AccessToken = accessToken
 			cfg.Channels.OneBot.AllowFrom = config.FlexibleStringSlice{}
 		case 9:
 			cfg.Channels.WeCom.Enabled = true
-			cfg.Channels.WeCom.Token = readLine("  WeCom webhook token: ")
-			cfg.Channels.WeCom.WebhookURL = readLine("  WeCom webhook URL: ")
+			var token, webhookURL string
+			huh.NewInput().
+				Title("WeCom webhook token").
+				Value(&token).
+				Run()
+			huh.NewInput().
+				Title("WeCom webhook URL").
+				Value(&webhookURL).
+				Run()
+			cfg.Channels.WeCom.Token = token
+			cfg.Channels.WeCom.WebhookURL = webhookURL
 			cfg.Channels.WeCom.AllowFrom = config.FlexibleStringSlice{}
 		case 10:
 			cfg.Channels.MaixCam.Enabled = true
-			cfg.Channels.MaixCam.Host = readLine("  MaixCam host (default: 0.0.0.0): ")
-			if cfg.Channels.MaixCam.Host == "" {
-				cfg.Channels.MaixCam.Host = "0.0.0.0"
+			var host string
+			huh.NewInput().
+				Title("MaixCam host").
+				Placeholder("0.0.0.0").
+				Value(&host).
+				Run()
+			if host == "" {
+				host = "0.0.0.0"
 			}
+			cfg.Channels.MaixCam.Host = host
 			cfg.Channels.MaixCam.AllowFrom = config.FlexibleStringSlice{}
 		}
 	}
+}
+
+func huhOptionsFromSlice(options []string) []huh.Option[int] {
+	opts := make([]huh.Option[int], len(options))
+	for i, opt := range options {
+		opts[i] = huh.NewOption(opt, i)
+	}
+	return opts
 }
 
 var providerList = []string{
@@ -290,219 +482,22 @@ func modelsToNames(list []config.ModelConfig) []string {
 	return result
 }
 
+func promptSelectModel(provider string) string {
+	models := providerModels[provider]
+	var idx int
+	huh.NewSelect[int]().
+		Title(fmt.Sprintf("Select model for %s", provider)).
+		Options(huhOptionsFromSlice(models)...).
+		Value(&idx).
+		Run()
+	return models[idx]
+}
+
 func readLine(prompt string) string {
 	fmt.Print(prompt)
 	reader := bufio.NewReader(os.Stdin)
 	line, _ := reader.ReadString('\n')
 	return strings.TrimSpace(line)
-}
-
-func promptYesNo(prompt string) bool {
-	fmt.Print(prompt + " (y/n): ")
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		line, _ := reader.ReadString('\n')
-		line = strings.ToLower(strings.TrimSpace(line))
-		if line == "y" || line == "yes" {
-			return true
-		}
-		if line == "n" || line == "no" {
-			return false
-		}
-	}
-}
-
-func promptChoice(options []string) int {
-	return promptChoiceTUI(options)
-}
-
-func promptSelect(prompt, provider string) string {
-	models := providerModels[provider]
-	return promptSelectSimple(prompt, models)
-}
-
-func promptSelectIndex(prompt string, options []string) int {
-	return promptSelectIndexSimple(prompt, options)
-}
-
-func promptMultiSelect(options []string) []int {
-	return promptMultiSelectSimple(options)
-}
-
-func promptMultiSelectIndex(options []string) []int {
-	return promptMultiSelectIndexSimple(options)
-}
-
-func promptChoiceSimple(options []string) int {
-	for i, opt := range options {
-		fmt.Printf("  %d) %s\n", i+1, opt)
-	}
-	fmt.Print("Enter choice: ")
-	var n int
-	fmt.Scanln(&n)
-	if n < 1 || n > len(options) {
-		return 0
-	}
-	return n - 1
-}
-
-func promptSelectSimple(prompt string, models []string) string {
-	fmt.Println(prompt)
-	for i, m := range models {
-		fmt.Printf("  %d) %s\n", i+1, m)
-	}
-	fmt.Print("Select: ")
-	var n int
-	fmt.Scanln(&n)
-	if n < 1 || n > len(models) {
-		return models[0]
-	}
-	return models[n-1]
-}
-
-func promptSelectIndexSimple(prompt string, options []string) int {
-	fmt.Println(prompt)
-	for i, opt := range options {
-		fmt.Printf("  %d) %s\n", i+1, opt)
-	}
-	fmt.Print("Select: ")
-	var n int
-	fmt.Scanln(&n)
-	if n < 1 || n > len(options) {
-		return 0
-	}
-	return n - 1
-}
-
-func promptMultiSelectSimple(options []string) []int {
-	for i, opt := range options {
-		fmt.Printf("  %d) %s\n", i+1, opt)
-	}
-	fmt.Print("Enter numbers (comma-separated): ")
-	reader := bufio.NewReader(os.Stdin)
-	line, _ := reader.ReadString('\n')
-
-	var result []int
-	for _, part := range strings.Split(line, ",") {
-		var n int
-		fmt.Sscanf(strings.TrimSpace(part), "%d", &n)
-		if n >= 1 && n <= len(options) {
-			result = append(result, n-1)
-		}
-	}
-	return result
-}
-
-func promptMultiSelectIndexSimple(options []string) []int {
-	return promptMultiSelectSimple(options)
-}
-
-func promptChoiceTUI(options []string) int {
-	for {
-		fmt.Println("\nUse arrow keys to navigate, Enter to select.")
-		fmt.Println("(or press 1-" + fmt.Sprint(len(options)) + " then Enter)")
-		fmt.Println("")
-		for i, opt := range options {
-			fmt.Printf("  %d) %s\n", i+1, opt)
-		}
-		fmt.Print("> ")
-
-		reader := bufio.NewReader(os.Stdin)
-		line, _ := reader.ReadString('\n')
-		line = strings.TrimSpace(line)
-
-		if line != "" {
-			var n int
-			if _, err := fmt.Sscanf(line, "%d", &n); err == nil {
-				if n >= 1 && n <= len(options) {
-					return n - 1
-				}
-			}
-			fmt.Println("Invalid choice, try again.")
-			continue
-		}
-		return 0
-	}
-}
-
-func promptSelectTUI(prompt string, models []string) int {
-	for {
-		fmt.Println("\n" + prompt)
-		fmt.Println("(enter number 1-" + fmt.Sprint(len(models)) + ")")
-		fmt.Println("")
-		for i, m := range models {
-			fmt.Printf("  %d) %s\n", i+1, m)
-		}
-		fmt.Print("> ")
-
-		reader := bufio.NewReader(os.Stdin)
-		line, _ := reader.ReadString('\n')
-		line = strings.TrimSpace(line)
-
-		if line != "" {
-			var n int
-			if _, err := fmt.Sscanf(line, "%d", &n); err == nil {
-				if n >= 1 && n <= len(models) {
-					return n - 1
-				}
-			}
-			fmt.Println("Invalid choice, try again.")
-			continue
-		}
-		return 0
-	}
-}
-
-func promptMultiSelectTUI(options []string) []int {
-	selected := make([]bool, len(options))
-
-	for {
-		fmt.Println("\nSelect (space to toggle, Enter to confirm)")
-		fmt.Println("(or enter numbers separated by commas, e.g., 1,3,5)")
-		fmt.Println("")
-		for i, opt := range options {
-			mark := " "
-			if selected[i] {
-				mark = "x"
-			}
-			fmt.Printf("  [%s] %d) %s\n", mark, i+1, opt)
-		}
-		fmt.Print("> ")
-
-		reader := bufio.NewReader(os.Stdin)
-		line, _ := reader.ReadString('\n')
-		line = strings.TrimSpace(line)
-
-		if line != "" {
-			selected = make([]bool, len(options))
-			for _, part := range strings.Split(line, ",") {
-				var n int
-				if _, err := fmt.Sscanf(strings.TrimSpace(part), "%d", &n); err == nil {
-					if n >= 1 && n <= len(options) {
-						selected[n-1] = true
-					}
-				}
-			}
-			var result []int
-			for i, s := range selected {
-				if s {
-					result = append(result, i)
-				}
-			}
-			if len(result) > 0 {
-				return result
-			}
-		}
-		fmt.Println("Invalid selection, try again.")
-	}
-}
-
-func promptMultiSelectIndexTUI(options []string) []int {
-	return promptMultiSelectTUI(options)
-}
-
-func clearScreen() {
-	fmt.Print("\033[2J\033[H")
 }
 
 func getWorkspacePath() string {
