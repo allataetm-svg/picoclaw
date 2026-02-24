@@ -89,6 +89,9 @@ func NewAgentInstance(
 		teamMembers = agentCfg.TeamMembers
 	}
 
+	// Set agent info for system prompt
+	contextBuilder.SetAgentInfo(agentID, agentName, agentDesc, capabilities)
+
 	maxIter := defaults.MaxToolIterations
 	if maxIter == 0 {
 		maxIter = 20

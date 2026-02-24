@@ -19,6 +19,10 @@ type ContextBuilder struct {
 	skillsLoader *skills.SkillsLoader
 	memory       *MemoryStore
 	tools        *tools.ToolRegistry // Direct reference to tool registry
+	agentID      string
+	agentName    string
+	agentDesc    string
+	capabilities []string
 }
 
 func getGlobalConfigDir() string {
@@ -48,6 +52,14 @@ func (cb *ContextBuilder) SetToolsRegistry(registry *tools.ToolRegistry) {
 	cb.tools = registry
 }
 
+// SetAgentInfo sets the agent-specific information for the system prompt.
+func (cb *ContextBuilder) SetAgentInfo(agentID, agentName, agentDesc string, capabilities []string) {
+	cb.agentID = agentID
+	cb.agentName = agentName
+	cb.agentDesc = agentDesc
+	cb.capabilities = capabilities
+}
+
 func (cb *ContextBuilder) getIdentity() string {
 	now := time.Now().Format("2006-01-02 15:04 (Monday)")
 	workspacePath, _ := filepath.Abs(filepath.Join(cb.workspace))
@@ -56,9 +68,20 @@ func (cb *ContextBuilder) getIdentity() string {
 	// Build tools section dynamically
 	toolsSection := cb.buildToolsSection()
 
+	// Build agent identity
+	var identity string
+	if cb.agentName != "" {
+		identity = fmt.Sprintf("You are %s, %s.", cb.agentName, cb.agentDesc)
+		if len(cb.capabilities) > 0 {
+			identity += fmt.Sprintf("\n\nYour capabilities: %s", strings.Join(cb.capabilities, ", "))
+		}
+	} else {
+		identity = "You are picoclaw, a helpful AI assistant."
+	}
+
 	return fmt.Sprintf(`# picoclaw 🦞
 
-You are picoclaw, a helpful AI assistant.
+%s
 
 ## Current Time
 %s
@@ -71,6 +94,7 @@ Your workspace is at: %s
 - Memory: %s/memory/MEMORY.md
 - Daily Notes: %s/memory/YYYYMM/YYYYMMDD.md
 - Skills: %s/skills/{skill-name}/SKILL.md
+- Agent Memory: %s/memory/agents/
 
 %s
 
@@ -81,7 +105,7 @@ Your workspace is at: %s
 2. **Be helpful and accurate** - When using tools, briefly explain what you're doing.
 
 3. **Memory** - When interacting with me if something seems memorable, update %s/memory/MEMORY.md`,
-		now, runtime, workspacePath, workspacePath, workspacePath, workspacePath, toolsSection, workspacePath)
+		identity, now, runtime, workspacePath, workspacePath, workspacePath, workspacePath, toolsSection, workspacePath)
 }
 
 func (cb *ContextBuilder) buildToolsSection() string {
