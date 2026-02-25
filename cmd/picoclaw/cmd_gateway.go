@@ -19,6 +19,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/cron"
 	"github.com/sipeed/picoclaw/pkg/devices"
+	"github.com/sipeed/picoclaw/pkg/gateway"
 	"github.com/sipeed/picoclaw/pkg/health"
 	"github.com/sipeed/picoclaw/pkg/heartbeat"
 	"github.com/sipeed/picoclaw/pkg/logger"
@@ -219,6 +220,16 @@ func gatewayCmd() {
 	}()
 	fmt.Printf("✓ Health endpoints available at http://%s:%d/health and /ready\n", cfg.Gateway.Host, cfg.Gateway.Port)
 
+	// Start WebSocket Gateway server
+	wsAddr := fmt.Sprintf("%s:%d", cfg.Gateway.Host, cfg.Gateway.Port+1)
+	wsServer := gateway.New(cfg, agentLoop, channelManager)
+	go func() {
+		if err := wsServer.Start(wsAddr); err != nil && err != http.ErrServerClosed {
+			logger.ErrorCF("gateway", "WebSocket server error", map[string]any{"error": err.Error()})
+		}
+	}()
+	fmt.Printf("✓ WebSocket Gateway available at ws://%s/ws\n", wsAddr)
+
 	go agentLoop.Run(ctx)
 
 	sigChan := make(chan os.Signal, 1)
@@ -227,6 +238,7 @@ func gatewayCmd() {
 
 	fmt.Println("\nShutting down...")
 	cancel()
+	wsServer.Stop(context.Background())
 	healthServer.Stop(context.Background())
 	deviceService.Stop()
 	heartbeatService.Stop()

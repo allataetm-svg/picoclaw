@@ -55,6 +55,7 @@ type Config struct {
 	ModelList      []ModelConfig                  `json:"model_list"`
 	ProviderGroups map[string]ProviderGroupConfig `json:"provider_groups,omitempty"`
 	Gateway        GatewayConfig                  `json:"gateway"`
+	Pairing        PairingConfig                  `json:"pairing"`
 	Tools          ToolsConfig                    `json:"tools"`
 	Heartbeat      HeartbeatConfig                `json:"heartbeat"`
 	Devices        DevicesConfig                  `json:"devices"`
@@ -431,8 +432,16 @@ func (c *ModelConfig) Validate() error {
 }
 
 type GatewayConfig struct {
-	Host string `json:"host" env:"PICOCLAW_GATEWAY_HOST"`
-	Port int    `json:"port" env:"PICOCLAW_GATEWAY_PORT"`
+	Host  string `json:"host" env:"PICOCLAW_GATEWAY_HOST"`
+	Port  int    `json:"port" env:"PICOCLAW_GATEWAY_PORT"`
+	Token string `json:"token" env:"PICOCLAW_GATEWAY_TOKEN"`
+	WebUI bool   `json:"webui" env:"PICOCLAW_GATEWAY_WEBUI"`
+}
+
+type PairingConfig struct {
+	Enabled          bool   `json:"enabled" env:"PICOCLAW_PAIRING_ENABLED"`
+	AutoApproveLocal bool   `json:"auto_approve_local" env:"PICOCLAW_PAIRING_AUTO_APPROVE_LOCAL"`
+	DefaultDMPolicy  string `json:"default_dm_policy" env:"PICOCLAW_PAIRING_DEFAULT_DM_POLICY"`
 }
 
 type BraveConfig struct {

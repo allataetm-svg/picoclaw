@@ -39,6 +39,15 @@ func NewSessionManager(storage string) *SessionManager {
 	return sm
 }
 
+func (sm *SessionManager) Clear(key string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	if session, ok := sm.sessions[key]; ok {
+		session.Messages = nil
+		session.Summary = ""
+	}
+}
+
 func (sm *SessionManager) GetOrCreate(key string) *Session {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()

@@ -840,6 +840,16 @@ func (al *AgentLoop) forceCompression(agent *AgentInstance, sessionKey string) {
 	})
 }
 
+// GetDefaultAgent returns the default agent instance.
+func (al *AgentLoop) GetDefaultAgent() *AgentInstance {
+	return al.registry.GetDefaultAgent()
+}
+
+// GetRegistry returns the agent registry.
+func (al *AgentLoop) GetRegistry() *AgentRegistry {
+	return al.registry
+}
+
 // GetStartupInfo returns information about loaded tools and skills for logging.
 func (al *AgentLoop) GetStartupInfo() map[string]any {
 	info := make(map[string]any)
@@ -1063,9 +1073,27 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage) 
 	args := parts[1:]
 
 	switch cmd {
+	case "/status":
+		return al.handleStatusCommand(msg)
+
+	case "/new", "/reset":
+		return al.handleResetCommand(msg)
+
+	case "/compact":
+		return al.handleCompactCommand(msg)
+
+	case "/think":
+		return al.handleThinkCommand(args)
+
+	case "/verbose":
+		return al.handleVerboseCommand(args)
+
+	case "/usage":
+		return al.handleUsageCommand(args)
+
 	case "/show":
 		if len(args) < 1 {
-			return "Usage: /show [model|channel|agents]", true
+			return "Usage: /show [model|channel|agents|status]", true
 		}
 		switch args[0] {
 		case "model":
@@ -1079,6 +1107,8 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage) 
 		case "agents":
 			agentIDs := al.registry.ListAgentIDs()
 			return fmt.Sprintf("Registered agents: %s", strings.Join(agentIDs, ", ")), true
+		case "status":
+			return al.handleStatusCommand(msg)
 		default:
 			return fmt.Sprintf("Unknown show target: %s", args[0]), true
 		}
@@ -1136,6 +1166,111 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage) 
 	}
 
 	return "", false
+}
+
+func (al *AgentLoop) handleStatusCommand(msg bus.InboundMessage) (string, bool) {
+	defaultAgent := al.registry.GetDefaultAgent()
+	if defaultAgent == nil {
+		return "No default agent configured", true
+	}
+
+	sessionKey := routing.BuildAgentMainSessionKey(defaultAgent.ID)
+	history := defaultAgent.Sessions.GetHistory(sessionKey)
+	tokens := al.estimateTokens(history)
+
+	return fmt.Sprintf("Model: %s | Tokens: ~%d | Channel: %s", defaultAgent.Model, tokens, msg.Channel), true
+}
+
+func (al *AgentLoop) handleResetCommand(msg bus.InboundMessage) (string, bool) {
+	defaultAgent := al.registry.GetDefaultAgent()
+	if defaultAgent == nil {
+		return "No default agent configured", true
+	}
+
+	sessionKey := routing.BuildAgentMainSessionKey(defaultAgent.ID)
+	defaultAgent.Sessions.Clear(sessionKey)
+	defaultAgent.Sessions.Save(sessionKey)
+
+	return "Session reset. Starting fresh.", true
+}
+
+func (al *AgentLoop) handleCompactCommand(msg bus.InboundMessage) (string, bool) {
+	defaultAgent := al.registry.GetDefaultAgent()
+	if defaultAgent == nil {
+		return "No default agent configured", true
+	}
+
+	sessionKey := routing.BuildAgentMainSessionKey(defaultAgent.ID)
+	al.forceCompression(defaultAgent, sessionKey)
+
+	history := defaultAgent.Sessions.GetHistory(sessionKey)
+	tokens := al.estimateTokens(history)
+
+	return fmt.Sprintf("Context compacted. Current tokens: ~%d", tokens), true
+}
+
+func (al *AgentLoop) handleThinkCommand(args []string) (string, bool) {
+	if len(args) < 1 {
+		return "Usage: /think [off|minimal|low|medium|high|xhigh]", true
+	}
+
+	level := args[0]
+	validLevels := map[string]bool{
+		"off": true, "minimal": true, "low": true,
+		"medium": true, "high": true, "xhigh": true,
+	}
+
+	if !validLevels[level] {
+		return "Invalid thinking level. Use: off, minimal, low, medium, high, or xhigh", true
+	}
+
+	defaultAgent := al.registry.GetDefaultAgent()
+	if defaultAgent == nil {
+		return "No default agent configured", true
+	}
+
+	defaultAgent.ThinkingLevel = level
+	return fmt.Sprintf("Thinking level set to: %s", level), true
+}
+
+func (al *AgentLoop) handleVerboseCommand(args []string) (string, bool) {
+	if len(args) < 1 {
+		return "Usage: /verbose [on|off]", true
+	}
+
+	mode := args[0]
+	if mode != "on" && mode != "off" {
+		return "Usage: /verbose [on|off]", true
+	}
+
+	defaultAgent := al.registry.GetDefaultAgent()
+	if defaultAgent == nil {
+		return "No default agent configured", true
+	}
+
+	defaultAgent.Verbose = (mode == "on")
+	return fmt.Sprintf("Verbose output: %s", mode), true
+}
+
+func (al *AgentLoop) handleUsageCommand(args []string) (string, bool) {
+	if len(args) < 1 {
+		return "Usage: /usage [off|tokens|full]", true
+	}
+
+	mode := args[0]
+	validModes := map[string]bool{"off": true, "tokens": true, "full": true}
+
+	if !validModes[mode] {
+		return "Invalid usage mode. Use: off, tokens, or full", true
+	}
+
+	defaultAgent := al.registry.GetDefaultAgent()
+	if defaultAgent == nil {
+		return "No default agent configured", true
+	}
+
+	defaultAgent.UsageLevel = mode
+	return fmt.Sprintf("Usage tracking: %s", mode), true
 }
 
 // extractPeer extracts the routing peer from inbound message metadata.

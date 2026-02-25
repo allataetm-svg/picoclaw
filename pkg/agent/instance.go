@@ -37,6 +37,9 @@ type AgentInstance struct {
 	TeamLeader     bool
 	TeamMembers    []string
 	Candidates     []providers.FallbackCandidate
+	ThinkingLevel  string
+	Verbose        bool
+	UsageLevel     string
 }
 
 // NewAgentInstance creates an agent instance from config.
