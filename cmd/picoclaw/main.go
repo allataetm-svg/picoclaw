@@ -113,6 +113,8 @@ func main() {
 		authCmd()
 	case "cron":
 		cronCmd()
+	case "pairing":
+		pairingCmd()
 	case "skills":
 		if len(os.Args) < 3 {
 			skillsHelp()
@@ -183,6 +185,7 @@ func printHelp() {
 	fmt.Println("  gateway     Start picoclaw gateway")
 	fmt.Println("  status      Show picoclaw status")
 	fmt.Println("  cron        Manage scheduled tasks")
+	fmt.Println("  pairing     Manage device pairing (approve, revoke, list)")
 	fmt.Println("  skills      Manage skills (install, list, remove)")
 	fmt.Println()
 	fmt.Println("Flags:")

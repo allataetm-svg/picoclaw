@@ -55,6 +55,17 @@ type Message struct {
 	Error   string          `json:"error,omitempty"`
 }
 
+type ConnectMessage struct {
+	Type    string `json:"type"`
+	Payload struct {
+		ClientID string `json:"clientId"`
+		Role     string `json:"role"`
+		Auth     struct {
+			Token string `json:"token"`
+		} `json:"auth"`
+	} `json:"payload"`
+}
+
 type ConnectParams struct {
 	Auth struct {
 		Token string `json:"token,omitempty"`
@@ -193,13 +204,7 @@ func (s *Server) readPump(c *Client) {
 			break
 		}
 
-		var msg Message
-		if err := json.Unmarshal(message, &msg); err != nil {
-			s.sendError(c, "", err.Error())
-			continue
-		}
-
-		s.handleMessage(c, &msg)
+		s.handleMessage(c, message)
 	}
 }
 
@@ -235,47 +240,70 @@ func (s *Server) writePump(c *Client) {
 	}
 }
 
-func (s *Server) handleMessage(c *Client, msg *Message) {
+func (s *Server) handleMessage(c *Client, rawMsg json.RawMessage) {
+	var msg Message
+	if err := json.Unmarshal(rawMsg, &msg); err != nil {
+		c.send <- mustMarshal(Message{
+			Type:  "res",
+			Ok:    false,
+			Error: "invalid JSON",
+		})
+		return
+	}
+
 	switch msg.Type {
 	case "req":
-		s.handleRequest(c, msg)
+		s.handleRequest(c, &msg)
 	case "event":
-		s.handleEvent(c, msg)
+		s.handleEvent(c, &msg)
+	case "connect":
+		s.handleConnect(c, rawMsg)
 	default:
-		if msg.Type == "connect" || (msg.Method == "" && msg.Event == "") {
-			s.handleConnect(c, msg)
+		if msg.Method == "" && msg.Event == "" {
+			s.handleConnect(c, rawMsg)
 		} else {
-			s.sendError(c, msg.ID, "unknown message type")
+			s.sendError(c, msg.ID, "unknown message type: "+msg.Type)
 		}
 	}
 }
 
-func (s *Server) handleConnect(c *Client, msg *Message) {
-	var params ConnectParams
-	if err := json.Unmarshal(msg.Payload, &params); err != nil {
-		s.sendError(c, msg.ID, "invalid connect params")
+func (s *Server) handleConnect(c *Client, rawMsg json.RawMessage) {
+	var msg ConnectMessage
+	if err := json.Unmarshal(rawMsg, &msg); err != nil {
+		c.send <- mustMarshal(Message{
+			Type:  "res",
+			Ok:    false,
+			Error: "invalid connect message format",
+		})
 		return
 	}
 
-	if s.token != "" && params.Auth.Token != s.token {
-		s.sendError(c, msg.ID, "unauthorized")
+	clientID := msg.Payload.ClientID
+	role := msg.Payload.Role
+	token := msg.Payload.Auth.Token
+
+	if s.token != "" && token != s.token {
+		c.send <- mustMarshal(Message{
+			Type:  "res",
+			Ok:    false,
+			Error: "unauthorized: invalid token",
+		})
 		return
 	}
 
-	c.clientID = params.ClientID
-	if c.clientID == "" {
-		c.clientID = generateClientID()
+	if clientID == "" {
+		clientID = generateClientID()
 	}
-	c.role = params.Role
-	if c.role == "" {
-		c.role = "client"
+	if role == "" {
+		role = "client"
 	}
 
+	c.clientID = clientID
+	c.role = role
 	s.registerClient(c)
 
 	resp := Message{
 		Type: "res",
-		ID:   msg.ID,
 		Ok:   true,
 	}
 
