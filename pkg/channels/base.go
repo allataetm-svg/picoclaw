@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sipeed/picoclaw/pkg/bus"
+	"github.com/sipeed/picoclaw/pkg/pairing"
 )
 
 type Channel interface {
@@ -17,11 +18,13 @@ type Channel interface {
 }
 
 type BaseChannel struct {
-	config    any
-	bus       *bus.MessageBus
-	running   bool
-	name      string
-	allowList []string
+	config      any
+	bus         *bus.MessageBus
+	running     bool
+	name        string
+	allowList   []string
+	pairingMgr  *pairing.PairingManager
+	pairingMode bool
 }
 
 func NewBaseChannel(name string, config any, bus *bus.MessageBus, allowList []string) *BaseChannel {
@@ -32,6 +35,22 @@ func NewBaseChannel(name string, config any, bus *bus.MessageBus, allowList []st
 		allowList: allowList,
 		running:   false,
 	}
+}
+
+func (c *BaseChannel) SetPairingManager(pm *pairing.PairingManager, mode bool) {
+	c.pairingMgr = pm
+	c.pairingMode = mode
+}
+
+func (c *BaseChannel) IsPaired(senderID string) bool {
+	if c.pairingMgr == nil || !c.pairingMode {
+		return true
+	}
+	return c.pairingMgr.IsApproved(c.name, senderID)
+}
+
+func (c *BaseChannel) Send(ctx context.Context, msg bus.OutboundMessage) error {
+	return nil
 }
 
 func (c *BaseChannel) Name() string {
@@ -86,6 +105,11 @@ func (c *BaseChannel) HandleMessage(senderID, chatID, content string, media []st
 		return
 	}
 
+	if c.pairingMode && c.pairingMgr != nil && !c.pairingMgr.IsApproved(c.name, senderID) {
+		c.handleUnpairedUser(senderID, chatID, content)
+		return
+	}
+
 	msg := bus.InboundMessage{
 		Channel:  c.name,
 		SenderID: senderID,
@@ -96,6 +120,21 @@ func (c *BaseChannel) HandleMessage(senderID, chatID, content string, media []st
 	}
 
 	c.bus.PublishInbound(msg)
+}
+
+func (c *BaseChannel) handleUnpairedUser(senderID, chatID, content string) {
+	code := c.pairingMgr.GenerateCodeForApproval(c.name, senderID, "")
+
+	msg := bus.OutboundMessage{
+		Channel: c.name,
+		ChatID:  chatID,
+		Content: "🔐 You are not paired with this bot.\n\n" +
+			"To get access, run this command in your terminal:\n" +
+			"```\npicoclaw pairing approve " + c.name + " " + senderID + " " + code + "\n```\n\n" +
+			"This code expires in 5 minutes.",
+	}
+
+	c.bus.PublishOutbound(msg)
 }
 
 func (c *BaseChannel) setRunning(running bool) {

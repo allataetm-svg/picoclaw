@@ -106,6 +106,14 @@ func (pm *PairingManager) GenerateCode(channel, senderID, senderName string) (st
 	return code, nil
 }
 
+func (pm *PairingManager) GenerateCodeForApproval(channel, senderID, senderName string) string {
+	code, err := pm.GenerateCode(channel, senderID, senderName)
+	if err != nil {
+		return ""
+	}
+	return code
+}
+
 func (pm *PairingManager) generateSecureCode() (string, error) {
 	const digits = "0123456789"
 	code := make([]byte, pm.codeLength)

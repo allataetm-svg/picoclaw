@@ -267,6 +267,11 @@ func DefaultConfig() *Config {
 			Host: "0.0.0.0",
 			Port: 18790,
 		},
+		Pairing: PairingConfig{
+			Enabled:          false,
+			AutoApproveLocal: true,
+			DefaultDMPolicy:  "pairing",
+		},
 		Tools: ToolsConfig{
 			Web: WebToolsConfig{
 				Brave: BraveConfig{

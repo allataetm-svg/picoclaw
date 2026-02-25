@@ -134,6 +134,12 @@ func gatewayCmd() {
 		os.Exit(1)
 	}
 
+	// Setup pairing if enabled
+	if cfg.Pairing.Enabled {
+		channelManager.SetupPairing()
+		fmt.Println("✓ Pairing enabled")
+	}
+
 	// Inject channel manager into agent loop for command handling
 	agentLoop.SetChannelManager(channelManager)
 

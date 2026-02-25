@@ -15,12 +15,14 @@ import (
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/constants"
 	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/sipeed/picoclaw/pkg/pairing"
 )
 
 type Manager struct {
 	channels     map[string]Channel
 	bus          *bus.MessageBus
 	config       *config.Config
+	pairingMgr   *pairing.PairingManager
 	dispatchTask *asyncTask
 	mu           sync.RWMutex
 }
@@ -34,6 +36,14 @@ func NewManager(cfg *config.Config, messageBus *bus.MessageBus) (*Manager, error
 		channels: make(map[string]Channel),
 		bus:      messageBus,
 		config:   cfg,
+	}
+
+	if cfg.Pairing.Enabled {
+		workspace := cfg.WorkspacePath()
+		m.pairingMgr = pairing.NewPairingManager(workspace + "/pairing")
+		logger.InfoCF("pairing", "Pairing enabled", map[string]any{
+			"workspace": workspace + "/pairing",
+		})
 	}
 
 	if err := m.initChannels(); err != nil {
@@ -368,4 +378,30 @@ func (m *Manager) SendToChannel(ctx context.Context, channelName, chatID, conten
 	}
 
 	return channel.Send(ctx, msg)
+}
+
+type PairingChannel interface {
+	SetPairingManager(*pairing.PairingManager, bool)
+}
+
+func (m *Manager) SetupPairing() {
+	if m.pairingMgr == nil {
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for name, ch := range m.channels {
+		if pc, ok := ch.(PairingChannel); ok {
+			pc.SetPairingManager(m.pairingMgr, m.config.Pairing.Enabled)
+			logger.InfoCF("pairing", "Pairing enabled for channel", map[string]any{
+				"channel": name,
+			})
+		}
+	}
+}
+
+func (m *Manager) GetPairingManager() *pairing.PairingManager {
+	return m.pairingMgr
 }
