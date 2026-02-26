@@ -381,7 +381,7 @@ func (m *Manager) SendToChannel(ctx context.Context, channelName, chatID, conten
 }
 
 type PairingChannel interface {
-	SetPairingManager(*pairing.PairingManager, bool)
+	SetPairingManager(pm *pairing.PairingManager, mode bool)
 }
 
 func (m *Manager) SetupPairing() {

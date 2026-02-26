@@ -7,6 +7,13 @@ import (
 	"github.com/sipeed/picoclaw/pkg/pairing"
 )
 
+func maskCode(code string) string {
+	if len(code) <= 2 {
+		return "**"
+	}
+	return "**" + code[len(code)-2:]
+}
+
 func pairingCmd() {
 	if len(os.Args) < 3 {
 		pairingHelp()
@@ -43,14 +50,32 @@ func pairingCmd() {
 			fmt.Println("No pending requests")
 		}
 		for _, p := range pending {
-			fmt.Printf("  %s:%s (code: %s, expires: %s)\n", p.Channel, p.SenderID, p.Code, p.ExpiresAt.Format("15:04"))
+			fmt.Printf(
+				"  %s:%s (code: %s, expires: %s)\n",
+				p.Channel, p.SenderID, maskCode(p.Code), p.ExpiresAt.Format("15:04"),
+			)
 		}
 
 	case "approve":
-		if len(os.Args) < 6 {
-			fmt.Println("Usage: picoclaw pairing approve <channel> <sender_id> <code>")
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: picoclaw pairing approve <code>")
+			fmt.Println("       picoclaw pairing approve <channel> <sender_id> <code>")
 			os.Exit(1)
 		}
+
+		// Support simplified approve with just code
+		if len(os.Args) == 4 {
+			code := os.Args[3]
+			_, err := pm.ApproveByCode(code)
+			if err != nil {
+				fmt.Printf("Error: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("✓ Approved with code: %s\n", code)
+			return
+		}
+
+		// Original approve with channel, sender_id, and code
 		channel := os.Args[3]
 		senderID := os.Args[4]
 		code := os.Args[5]
@@ -107,12 +132,14 @@ func pairingHelp() {
 	fmt.Println("")
 	fmt.Println("Commands:")
 	fmt.Println("  list                      List approved and pending pairings")
-	fmt.Println("  approve <channel> <id> <code>  Approve a pairing request")
+	fmt.Println("  approve <code>            Approve a pairing request using just the code")
+	fmt.Println("  approve <channel> <id> <code>  Approve a pairing request (full form)")
 	fmt.Println("  revoke <channel> <id>    Revoke an approved device")
 	fmt.Println("  generate <channel> <id> [name]  Generate a pairing code")
 	fmt.Println("")
 	fmt.Println("Examples:")
 	fmt.Println("  picoclaw pairing list")
+	fmt.Println("  picoclaw pairing approve 123456")
 	fmt.Println("  picoclaw pairing approve telegram 123456 123456")
 	fmt.Println("  picoclaw pairing revoke telegram 123456")
 	fmt.Println("  picoclaw pairing generate telegram 123456 John")

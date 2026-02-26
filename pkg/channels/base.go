@@ -130,7 +130,7 @@ func (c *BaseChannel) handleUnpairedUser(senderID, chatID, content string) {
 		ChatID:  chatID,
 		Content: "🔐 You are not paired with this bot.\n\n" +
 			"To get access, run this command in your terminal:\n" +
-			"```\npicoclaw pairing approve " + c.name + " " + senderID + " " + code + "\n```\n\n" +
+			"```\npicoclaw pairing approve " + code + "\n```\n\n" +
 			"This code expires in 5 minutes.",
 	}
 

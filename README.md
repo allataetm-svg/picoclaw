@@ -309,6 +309,8 @@ Talk to your picoclaw through Telegram, Discord, DingTalk, LINE, or WeCom
 }
 ```
 
+> **Tip:** Use `pairing_mode: true` instead of `allow_from` to let users approve themselves. See [Pairing Mode](#pairing-mode-user-approval-system) below.
+
 > Get your user ID from `@userinfobot` on Telegram.
 
 **3. Run**
@@ -368,6 +370,55 @@ Set `"mention_only": true` to make the bot respond only when @-mentioned. Useful
 ```bash
 picoclaw gateway
 ```
+
+### Pairing Mode (User Approval System)
+
+Instead of manually configuring `allow_from` user IDs, you can use PicoClaw's pairing system to let users approve themselves.
+
+**1. Enable pairing mode in config:**
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "token": "YOUR_BOT_TOKEN",
+      "pairing_mode": true
+    }
+  }
+}
+```
+
+**2. How it works:**
+
+- When a new user messages PicoClaw, they receive a 6-digit pairing code
+- The user then approves themselves by running:
+  ```bash
+  picoclaw pairing approve <CODE>
+  ```
+- Each user must pair individually - only approved users can message
+
+**3. Pairing commands:**
+
+```bash
+# Approve a pending pairing request
+picoclaw pairing approve 123456
+
+# Approve with full channel details (alternative)
+picoclaw pairing approve telegram 123456789 123456
+
+# Revoke an approved user
+picoclaw pairing revoke telegram 123456789
+
+# Generate a pairing code manually
+picoclaw pairing generate telegram 123456789 John
+```
+
+**Security features:**
+- Rate limiting: Max 3 code requests per minute per user
+- Codes expire after 5 minutes
+- Codes are single-use (cannot be reused after approval)
+- Used codes are stored to prevent replay attacks
 
 </details>
 
