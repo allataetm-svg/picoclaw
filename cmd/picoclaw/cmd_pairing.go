@@ -29,13 +29,18 @@ func pairingCmd() {
 	}
 
 	workspace := cfg.WorkspacePath()
-	pm := pairing.NewPairingManager(workspace + "/pairing")
+	storagePath := workspace + "/pairing"
 
-	fmt.Printf("[DEBUG] Storage path: %s/pairing\n", workspace)
-	fmt.Printf("[DEBUG] Pending count: %d\n", len(pm.ListPending()))
+	fmt.Printf("[DEBUG] Config workspace: %s\n", workspace)
+	fmt.Printf("[DEBUG] Storage path: %s\n", storagePath)
+
+	pm := pairing.NewPairingManager(storagePath)
+
+	fmt.Printf("[DEBUG] Pending count after load: %d\n", len(pm.ListPending()))
 
 	switch subcommand {
 	case "list":
+		pm.Cleanup()
 		pm.Cleanup()
 		approved := pm.ListApproved()
 		pending := pm.ListPending()
