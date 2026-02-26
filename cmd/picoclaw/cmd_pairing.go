@@ -31,6 +31,9 @@ func pairingCmd() {
 	workspace := cfg.WorkspacePath()
 	pm := pairing.NewPairingManager(workspace + "/pairing")
 
+	fmt.Printf("[DEBUG] Storage path: %s/pairing\n", workspace)
+	fmt.Printf("[DEBUG] Pending count: %d\n", len(pm.ListPending()))
+
 	switch subcommand {
 	case "list":
 		pm.Cleanup()
@@ -66,6 +69,11 @@ func pairingCmd() {
 		// Support simplified approve with just code
 		if len(os.Args) == 4 {
 			code := os.Args[3]
+			fmt.Printf("[DEBUG] Trying to approve with code: %s\n", code)
+			fmt.Printf("[DEBUG] All pending codes:\n")
+			for _, p := range pm.ListPending() {
+				fmt.Printf("  - %s:%s = %s\n", p.Channel, p.SenderID, p.Code)
+			}
 			_, err := pm.ApproveByCode(code)
 			if err != nil {
 				fmt.Printf("Error: %v\n", err)
